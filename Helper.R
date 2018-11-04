@@ -48,3 +48,7 @@ get_cormat <- function(data, maxFactor = 10) {
   return(cor(dummies))
 }
 
+getPage<-function(name) {
+  return(includeHTML(name))
+}
+

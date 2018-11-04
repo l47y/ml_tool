@@ -192,12 +192,10 @@ ui <- dashboardPage(
       ###################################################################################### 
         
       tabItem(
-        tabName = 'Documentation', 
-        includeHTML('Documentation.html'),
-        tags$head(tags$style("#text1{color: red;
-                                 font-size: 20px;
-                                 font-style: italic;
-                                 }"))
+        tabName = 'Documentation',
+        #htmlOutput("inc")
+        includeMarkdown('Documentation.Rmd')
+        #includeHTML('Documentation.html')
       )
       
     ) 
