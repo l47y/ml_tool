@@ -157,34 +157,38 @@ shinyServer(function(input, output, session) {
   
   observeEvent(input$imputeNAchar, {
     
-    charnas <- getcharnas()
-    if (input$selectNAcharactercolumns == 'ALL COLUMNS') {
-      colsToUse <- charnas
-    } else {
-      colsToUse <- input$selectNAcharactercolumns
+    if (is.null(input$selectNAcharactercolumns) == F) {
+      charnas <- getcharnas()
+      if (input$selectNAcharactercolumns == 'ALL COLUMNS') {
+        colsToUse <- charnas
+      } else {
+        colsToUse <- input$selectNAcharactercolumns
+      }
+      naAction <- case_when(input$strategyNAchar == 'Most frequent' ~ 'na.most_freq')
+      tmpdat <- globaldata() %>% impute_at(.na = eval(parse(text = naAction)), .vars = colsToUse)
+      globaldata(tmpdat)
+      updateSelectInput(session, inputId = 'selectNAcharactercolumns',
+                        choices = setdiff(charnas, colsToUse))
     }
-    naAction <- case_when(input$strategyNAchar == 'Most frequent' ~ 'na.most_freq')
-    tmpdat <- globaldata() %>% impute_at(.na = eval(parse(text = naAction)), .vars = colsToUse)
-    globaldata(tmpdat)
-    updateSelectInput(session, inputId = 'selectNAcharactercolumns',
-                      choices = setdiff(charnas, colsToUse))
   })
   
   observeEvent(input$imputeNAnum, {
     
-    numnas <- getnumnas()
-    if (input$selectNAnumericcolumns == 'ALL COLUMNS') {
-      colsToUse <- numnas
-    } else {
-      colsToUse <- input$selectNAnumericcolumns
-    }
-    naAction <- case_when(input$strategyNAnum == 'Median' ~ 'na.median',
-                          input$strategyNAnum == 'Mean' ~ 'na.mean',
-                          input$strategyNAnum == 'Set to zero' ~ 'na.zero')
-    tmpdat <- globaldata() %>% impute_at(.na = eval(parse(text = naAction)), .vars = colsToUse)
-    globaldata(tmpdat)
-    updateSelectInput(session, inputId = 'selectNAnumericcolumns',
+    if (is.null(input$selectNAnumericcolumns) == F) {
+      numnas <- getnumnas()
+      if (input$selectNAnumericcolumns == 'ALL COLUMNS') {
+        colsToUse <- numnas
+      } else {
+        colsToUse <- input$selectNAnumericcolumns
+      }
+      naAction <- case_when(input$strategyNAnum == 'Median' ~ 'na.median',
+                            input$strategyNAnum == 'Mean' ~ 'na.mean',
+                            input$strategyNAnum == 'Set to zero' ~ 'na.zero')
+      tmpdat <- globaldata() %>% impute_at(.na = eval(parse(text = naAction)), .vars = colsToUse)
+      globaldata(tmpdat)
+      updateSelectInput(session, inputId = 'selectNAnumericcolumns',
                      choices = setdiff(numnas, colsToUse))
+    }
   })
   
   observeEvent(input$resetNaTreats, {
@@ -275,7 +279,7 @@ shinyServer(function(input, output, session) {
                 multiple = T, selected = NULL)
   })
   
-  ######################################################################################  NA TREATMENT
+  ######################################################################################  CLEAN DATA
   
   output$infoboxNAcolumns <- renderInfoBox({
     nas <- getnumbermissings()

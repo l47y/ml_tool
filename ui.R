@@ -85,7 +85,7 @@ ui <- dashboardPage(
       ###################################################################################### 
       
       tabItem(
-        tabName = 'Clean data',
+        tabName = 'Cleandata',
         fluidPage(
           infoBoxOutput('infoboxNAcolumns'),
           column(12,
