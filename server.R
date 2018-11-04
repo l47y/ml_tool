@@ -3,6 +3,9 @@ source('config.R')
 shinyServer(function(input, output, session) {
   
   ######################################################################################  REACTIVES
+  ######################################################################################  REACTIVES
+  
+  ######################################################################################  DATA STUFF
   
   globaldata <- reactiveVal(NULL)
   model <- reactiveVal(NULL)
@@ -42,9 +45,25 @@ shinyServer(function(input, output, session) {
     data
   })
 
+  ######################################################################################  MISSING DATA STUFF
+  
   getnumbermissings <- reactive({
     sapply(globaldata(), function(x) sum(is.na(x)))
   })
+  
+  getcharnas <- reactive({
+    charcols <- get_colsoftype(getdatafiltered(), 'character')
+    nas <- getnumbermissings() 
+    intersect(names(nas[nas > 0]), charcols)
+  })
+  
+  getnumnas <- reactive({
+    numcols <- get_colsoftype(getdatafiltered(), c('numeric', 'integer'))
+    nas <- getnumbermissings() 
+    intersect(names(nas[nas > 0]), numcols)
+  })
+  
+  ######################################################################################  COUNT FILTERS
   
   getnumberfilters <- reactive({
     count <- 0
@@ -59,6 +78,8 @@ shinyServer(function(input, output, session) {
     }
     count
   })
+  
+  ######################################################################################  MODEL STUFF
   
   prepareDataForLearn <- eventReactive(input$learnmodel, {
     tmpdat <- globaldata() %>% make_strToFactors() %>% make_conformColnames()
@@ -75,28 +96,49 @@ shinyServer(function(input, output, session) {
   })
   
   getalgo <- reactive({
-    algo = case_when(input$learnchoosealgo == 'Linear Regression' ~ 'lm', 
-                     input$learnchoosealgo == 'Decision tree' ~ 'rpart', 
-                     input$learnchoosealgo == 'Logistic Regression' ~ 'logreg')
+    algo <- learningalgos_dict[[input$learnchoosealgo]]
     paste0(gettaskPrefix(), algo)
   })
   
   learnmodel <- eventReactive(input$learnmodel, {
     
+    # check whether NAs exist and if they can be handled by the algorithm
+    nasPossible <- listLearners() %>% 
+      filter(short.name == learningalgos_dict[[input$learnchoosealgo]]) %>% 
+      pull(missings)
+    if (mean(getnumbermissings()) != 0) {
+      validate(need(nasPossible == T, 'This algorithm cant handle NAs. Please remove them.'))
+    }
+    
+    # create a task 
     if (input$learnchoosetask == 'Regression') {
       task = makeRegrTask('task', data = prepareDataForLearn(), target = input$learnchoosetarget)
     } else if (input$learnchoosetask == 'Classification') {
       task = makeClassifTask('task', data = prepareDataForLearn(), target = input$learnchoosetarget)
     }
     
+    # create a validation desc 
     if (input$choosevalidationstrat == 'Holdout'){
       desc <- makeResampleDesc(method = 'Holdout', split = input$parameterforvalidationstrat)
     } else if (input$choosevalidationstrat == 'Cross validation') {
       desc <- makeResampleDesc(method = 'CV', iters = input$parameterforvalidationstrat)
     }
     
-    learner = makeLearner(cl = getalgo())
+    # create a list of parameters for the algorithm
+    params <- algos_dict[[learningalgos_dict[[input$learnchoosealgo]]]]$parameter
+    if (is_empty(params) == F) {
+      for (param in names(params)) {
+        if (input[[param]] != '') {
+          params[[param]] <- as.numeric(input[[param]])
+        }
+      }
+      params <- params[!unlist(lapply(params, is.null))]
+    }
+
+    # create learner 
+    learner <- makeLearner(cl = getalgo(), par.vals = params)
     
+    # train models if the validation strategy is not None
     if (input$choosevalidationstrat != 'None') {
       resample <- resample(learner, task, desc, 
                            measures = lapply(list(input$performancemeasures), 
@@ -104,19 +146,23 @@ shinyServer(function(input, output, session) {
     } else {
       resample <- list('measures.test' = NULL)
     }
+    
+    # train a final model on all data and return stuff
     model = train(task = task, learner = learner)
     list('model' = model, 'learner' = learner, 'task' = task, 'resample' = resample$measures.test)
   })
   
   ######################################################################################  OBSERVE
+  ######################################################################################  OBSERVE
   
   observeEvent(input$imputeNAchar, {
     
-    charcols <- get_colsoftype(getdatafiltered(), 'character')
-    nas <- getnumbermissings() 
-    charnas <- intersect(names(nas[nas > 0]), charcols)
-    
-    colsToUse <- input$selectNAcharactercolumns
+    charnas <- getcharnas()
+    if (input$selectNAcharactercolumns == 'ALL COLUMNS') {
+      colsToUse <- charnas
+    } else {
+      colsToUse <- input$selectNAcharactercolumns
+    }
     naAction <- case_when(input$strategyNAchar == 'Most frequent' ~ 'na.most_freq')
     tmpdat <- globaldata() %>% impute_at(.na = eval(parse(text = naAction)), .vars = colsToUse)
     globaldata(tmpdat)
@@ -126,11 +172,12 @@ shinyServer(function(input, output, session) {
   
   observeEvent(input$imputeNAnum, {
     
-    numcols <- get_colsoftype(getdatafiltered(), c('numeric', 'integer'))
-    nas <- getnumbermissings() 
-    numnas <- intersect(names(nas[nas > 0]), numcols)
-    
-    colsToUse <- input$selectNAnumericcolumns
+    numnas <- getnumnas()
+    if (input$selectNAnumericcolumns == 'ALL COLUMNS') {
+      colsToUse <- numnas
+    } else {
+      colsToUse <- input$selectNAnumericcolumns
+    }
     naAction <- case_when(input$strategyNAnum == 'Median' ~ 'na.median',
                           input$strategyNAnum == 'Mean' ~ 'na.mean',
                           input$strategyNAnum == 'Set to zero' ~ 'na.zero')
@@ -160,6 +207,8 @@ shinyServer(function(input, output, session) {
     })
   })
   
+  ######################################################################################  OUTPUTS
+  ######################################################################################  OUTPUTS
   
   ######################################################################################  OVERVIEW
   
@@ -235,19 +284,13 @@ shinyServer(function(input, output, session) {
   })
   
   output$selectNAcharactercolumns <- renderUI({
-    charcols <- get_colsoftype(getdatafiltered(), 'character')
-    nas <- getnumbermissings() 
-    charnas <- intersect(names(nas[nas > 0]), charcols)
-    selectInput('selectNAcharactercolumns', 'Select columns to remove NAs', choices = charnas, 
-                   multiple = T)
+    selectInput('selectNAcharactercolumns', 'Select columns to remove NAs', 
+                choices = c('ALL COLUMNS', getcharnas()), multiple = T)
   })
   
   output$selectNAnumericcolumns <- renderUI({
-    numcols <- get_colsoftype(getdatafiltered(), c('numeric', 'integer'))
-    nas <- getnumbermissings() 
-    numnas <- intersect(names(nas[nas > 0]), numcols)
-    selectInput('selectNAnumericcolumns', 'Select columns to remove NAs', choices = numnas, 
-                multiple = T)
+    selectInput('selectNAnumericcolumns', 'Select columns to remove NAs', 
+                choices = c('ALL COLUMNS', getnumnas()), multiple = T)
   })
   
   ######################################################################################  DETAILED ANALYSIS
@@ -311,23 +354,13 @@ shinyServer(function(input, output, session) {
     selectInput('learnchoosetarget', 'Choose target variable', choices = colnames(getdatadeleted()))
   })
   
-  output$plotperformanceoverview <- renderPlotly({
-    validate(need(is.null(input$datafile) == F, 'Please select data.'))
-    preds <- predict(learnmodel()$model, newdata = prepareDataForLearn()) 
-    if (input$learnchoosetask == 'Regression') {
-      p <- plot_ly(x = preds$data$truth, y = preds$data$response, type = 'scatter', mode = 'markers',
-              color = 'pink')
-    } else if(input$learnchoosetask == 'Classification') {
-      preds <- preds$data %>% group_by(response, truth) %>% summarize(n = n())
-      p <- plot_ly(x = preds$response, y = preds$truth, z = preds$n, type = 'heatmap', colors = 'PiYG') 
-    }
-    p %<>% add_plotlayout() %>% layout(xaxis = list(title = 'Target'), yaxis = list(title = 'Prediction'))
-  })
-  
-  output$testperformancetable <- renderTable({
-    validate(need(is.null(input$datafile) == F, 'Please select data.'))
-    validate(need(is.null(learnmodel()$resample) == F, 'No validation selected.'))
-    learnmodel()$resample
+  output$parametersofalgo <- renderUI({
+    algo <- learningalgos_dict[[input$learnchoosealgo]]
+    params <- algos_dict[[algo]]$parameter
+    validate(need(is.null(params) == F, 'This algorithm has no parameters to choose.'))
+    lapply(names(params), function(param){
+      textInput(inputId = param, label = param, value = '')
+      })
   })
   
   output$parameterforvalidationstrat <- renderUI({
@@ -347,12 +380,31 @@ shinyServer(function(input, output, session) {
     if (input$choosevalidationstrat != 'None') {
       if (input$learnchoosetask == 'Regression') {
         selectInput('performancemeasures', 'Performance measures', 
-                    choices = c('mse', 'rsq'), multiple = T)
+                    choices = c('mse', 'rsq'), multiple = T, selected = 'rsq')
       } else if (input$learnchoosetask == 'Classification') {
         selectInput('performancemeasures', 'Performance measures', 
-                    choices = c('acc'))
+                    choices = c('acc'), selected = 'acc')
       } 
     }
+  })
+  
+  output$plotperformanceoverview <- renderPlotly({
+    validate(need(is.null(input$datafile) == F, 'Please select data.'))
+    preds <- predict(learnmodel()$model, newdata = prepareDataForLearn()) 
+    if (input$learnchoosetask == 'Regression') {
+      p <- plot_ly(x = preds$data$truth, y = preds$data$response, type = 'scatter', mode = 'markers',
+              color = 'pink')
+    } else if(input$learnchoosetask == 'Classification') {
+      preds <- preds$data %>% group_by(response, truth) %>% summarize(n = n())
+      p <- plot_ly(x = preds$response, y = preds$truth, z = preds$n, type = 'heatmap', colors = 'PiYG') 
+    }
+    p %<>% add_plotlayout() %>% layout(xaxis = list(title = 'Target'), yaxis = list(title = 'Prediction'))
+  })
+  
+  output$testperformancetable <- renderTable({
+    validate(need(is.null(input$datafile) == F, 'Please select data.'))
+    validate(need(is.null(learnmodel()$resample) == F, 'No validation selected.'))
+    learnmodel()$resample
   })
 
 })

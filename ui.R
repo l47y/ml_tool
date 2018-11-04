@@ -10,14 +10,12 @@ ui <- dashboardPage(
     sidebarMenu(id = 'sidebarmenu',
                 menuItem('Select and Filter Data', tabName = 'SelectandFilterData',  icon = icon('database')),
                 menuItem('Overview', tabName = 'Overview', icon = icon('eye')),
-                menuItem('Clean data', tabName = 'Cleandata', icon = icon('broom'), 
-                         menuSubItem('NA treatment', tabName = 'NAtreatment'),
-                         menuSubItem('Clean correlations', tabName = 'Cleancorrelations')
-                ),
-                menuItem('Detailed analysis', tabName = 'Detailedanalysis', icon = icon('signal')),
-                menuItem('Correlations', tabName = 'Correlations', icon = icon('play')),
+                menuItem('Clean data', tabName = 'Cleandata', icon = icon('wrench', lib = 'glyphicon')),
+                menuItem('Detailed analysis', tabName = 'Detailedanalysis', icon = icon('signal', lib = 'glyphicon')),
+                menuItem('Correlations', tabName = 'Correlations', icon = icon('indent-right', lib = 'glyphicon')),
                 menuItem('Text analysis', tabName = 'Textanalysis', icon = icon('font')),
-                menuItem('Learn model', tabName = 'LearnModel')
+                menuItem('Learn model', tabName = 'LearnModel', icon = icon('random', lib = 'glyphicon')),
+                menuItem('Documentation', tabName = 'Documentation', icon = icon('list-alt', lib = 'glyphicon'))
                 
     )
   ),
@@ -28,6 +26,10 @@ ui <- dashboardPage(
       theme = 'purple_gradient'
     ),
     tabItems(
+      
+      ######################################################################################  
+      ###################################################################################### 
+      
       tabItem(
         tabName = 'SelectandFilterData',
         fluidPage(
@@ -56,6 +58,9 @@ ui <- dashboardPage(
         )
       ),
       
+      ######################################################################################  
+      ###################################################################################### 
+      
       tabItem(
         tabName = 'Overview',
         fluidPage(
@@ -76,8 +81,11 @@ ui <- dashboardPage(
         )
       ),
       
+      ######################################################################################  
+      ###################################################################################### 
+      
       tabItem(
-        tabName = 'NAtreatment',
+        tabName = 'Clean data',
         fluidPage(
           infoBoxOutput('infoboxNAcolumns'),
           column(12,
@@ -100,6 +108,9 @@ ui <- dashboardPage(
         )
       ),
       
+      ######################################################################################  
+      ###################################################################################### 
+      
       tabItem(
         tabName = 'Detailedanalysis',
         fluidPage(
@@ -114,6 +125,9 @@ ui <- dashboardPage(
         )
       ),
       
+      ######################################################################################  
+      ###################################################################################### 
+      
       tabItem(
         tabName = 'Correlations',
         fluidPage(
@@ -122,6 +136,9 @@ ui <- dashboardPage(
           )
         )
       ),
+      
+      ######################################################################################  
+      ###################################################################################### 
       
       tabItem(
         tabName = 'Textanalysis',
@@ -136,6 +153,9 @@ ui <- dashboardPage(
         )
       ),
       
+      ######################################################################################  
+      ######################################################################################  
+      
       tabItem(
         tabName = 'LearnModel',
         fluidPage(
@@ -144,6 +164,9 @@ ui <- dashboardPage(
             uiOutput('learnchoosealgo'),
             uiOutput('learnchoosetarget')
            
+          ),
+          box(title = 'Algorithm parameters', collapsible = T, solidHeader = T, width = 3,
+              uiOutput('parametersofalgo')
           ),
           box(title = 'Validation strategy', collapsible = T, solidHeader = T, width = 3,
               selectInput('choosevalidationstrat', 'Choose validation strategy', 
@@ -163,9 +186,19 @@ ui <- dashboardPage(
             )
           )
         )
-      )
+      ),
+      
+      ######################################################################################  
+      ###################################################################################### 
         
- 
+      tabItem(
+        tabName = 'Documentation', 
+        includeHTML('Documentation.html'),
+        tags$head(tags$style("#text1{color: red;
+                                 font-size: 20px;
+                                 font-style: italic;
+                                 }"))
+      )
       
     ) 
   ) 

@@ -1,0 +1,21 @@
+---
+title: "Documentation"
+output: 
+  html_document:
+    css: styles.css
+---
+
+# Algorithms
+
+## Decision Tree
+Suitable for: Classification, Regression     
+
+## Linear Regression
+Suitable for: Classification
+
+## Logistic Regression
+Suitable for: Classification
+
+
+
+

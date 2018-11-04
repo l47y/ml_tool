@@ -36,16 +36,20 @@
 # learner = makeLearner(cl = 'regr.rpart')
 # model = train(learner = learner, task = task)
 
-titanic = read_csv('/home/nicolas/Escritorio/Kaggle and other data/Titanic/train.csv') %>% 
+titanic = read_csv('/home/nicolas/Escritorio/Kaggle and other data/Titanic/train.csv') 
+titanic %<>% select(-Ticket, -Name, -PassengerId) %>% 
   make_conformColnames() %>% make_strToFactors() %>% createDummyFeatures()
 task = makeClassifTask(data = titanic, target = 'Survived')
-learner = makeLearner(cl = 'classif.rpart')
-x = 'Holdout'
+params = algos_dict[['rpart']]$parameter
+params$minbucket = 1
+params$maxdepth = 1
+params = params[!unlist(lapply(params, is.null))]
+learner = makeLearner(cl = 'classif.rpart', par.vals = params)
 desc = makeResampleDesc(method = 'CV', iter = 4)
 
 model = resample(learner = learner, task = task, resampling = desc, 
                  measures = lapply(list("acc", "acc"), function(str){eval(parse(text = str))}))
-)
+
 preds = predict(model, newdata = titanic)
 plot_ly(x = preds$data$truth, y = preds$data$response, type = 'scatter', mode = 'markers') %>% 
   add_plotlayout() %>% layout(xaxis = list(title = 'Target'), yaxis = list(title = 'Prediction'))
