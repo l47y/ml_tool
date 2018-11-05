@@ -38,14 +38,27 @@ make_conformColnames <- function(data) {
   return(data)
 }
 
-get_cormat <- function(data, maxFactor = 10) {
-  charcols <- get_colsoftype(data, 'character')
-  datatmp <- data %>% select(one_of(charcols))
+delete_colsWithManyFactors <- function(data, maxFactor = 10, onlyNames = F) {
+  datatmp <- data %>% select(one_of(get_colsoftype(data, c('character', 'factor'))))
   nuniques <- sapply(datatmp, function(col) {return(length(unique(col)))})
   todelete <- names(nuniques)[nuniques > maxFactor]
-  data %<>% select(-one_of(todelete)) %>% make_strToFactors()
+  if (onlyNames) {
+    return (todelete)
+  }
+  return(data %>% select(-one_of(todelete)))
+}
+
+get_cormat <- function(data, maxFactor = 10, NAtoZero = T) {
+  print(dim(data)[2])
+  data <- delete_colsWithManyFactors(data, maxFactor) %>% make_strToFactors()
+  print(dim(data)[2])
   dummies <- createDummyFeatures(data)
-  return(cor(dummies))
+  print(dim(dummies)[2])
+  cormatrix <- cor(dummies)
+  if (NAtoZero) {
+    cormatrix[is.na(cormatrix)] <- 0
+  } 
+  return(cormatrix)
 }
 
 getPage<-function(name) {

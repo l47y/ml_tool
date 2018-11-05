@@ -9,10 +9,12 @@ ui <- dashboardPage(
   dashboardSidebar(
     sidebarMenu(id = 'sidebarmenu',
                 menuItem('Select and Filter Data', tabName = 'SelectandFilterData',  icon = icon('database')),
+                menuItem('View data', tabName = 'Viewdata', icon = icon('align-justify', lib = 'glyphicon')),
                 menuItem('Overview', tabName = 'Overview', icon = icon('eye')),
                 menuItem('Clean data', tabName = 'Cleandata', icon = icon('wrench', lib = 'glyphicon')),
                 menuItem('Detailed analysis', tabName = 'Detailedanalysis', icon = icon('signal', lib = 'glyphicon')),
                 menuItem('Correlations', tabName = 'Correlations', icon = icon('indent-right', lib = 'glyphicon')),
+                menuItem('Feature selection', tabName = 'Featureselection', icon = icon('share', lib = 'glyphicon')),
                 menuItem('Text analysis', tabName = 'Textanalysis', icon = icon('font')),
                 menuItem('Learn model', tabName = 'LearnModel', icon = icon('random', lib = 'glyphicon')),
                 menuItem('Documentation', tabName = 'Documentation', icon = icon('list-alt', lib = 'glyphicon'))
@@ -55,6 +57,16 @@ ui <- dashboardPage(
                      uiOutput('numfilters')
                  )
           )
+        )
+      ),
+      
+      ######################################################################################  
+      ###################################################################################### 
+      
+      tabItem(
+        tabName = 'Viewdata', 
+        fluidPage(
+          DT::dataTableOutput('viewdata')
         )
       ),
       
@@ -131,9 +143,17 @@ ui <- dashboardPage(
       tabItem(
         tabName = 'Correlations',
         fluidPage(
+          box(title = 'One Hot Encoding', width = 3, collapsible = T, solidHeader = T, 
+              sliderInput('maxfactorsOHE', 'Maximum number of factors to encode', 
+                          min = 2, max = 100, value = 10),
+              checkboxInput('deleteothersOHE', 'Delete columns with too many factors'),
+              actionButton('ohe', 'Encode data'),
+              actionButton('resetohe', 'Reset encoding')
+          ),
           box(title = 'Correlations between variables', width = 8, collapsible = T, solidHeader = T,
             plotlyOutput('correlationplot')
           )
+          
         )
       ),
       

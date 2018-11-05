@@ -211,8 +211,55 @@ shinyServer(function(input, output, session) {
     })
   })
   
+  observeEvent(input$ohe, {
+    tmpdat <- globaldata() 
+    colsWithManyFactors <- delete_colsWithManyFactors(tmpdat, input$maxfactorsOHE, onlyNames = T)
+    allPossiblycols <- get_colsoftype(tmpdat, 'character')
+    OHEcols <- setdiff(allPossiblycols, colsWithManyFactors)
+    tmpdat <- createDummyFeatures(tmpdat %>% make_strToFactors(), cols = OHEcols)
+    if (input$deleteothersOHE == T) {
+      tmpdat %<>% select(-one_of(colsWithManyFactors))
+    }
+    globaldata(tmpdat)
+  })
+  
+  observeEvent(input$resetohe, {
+    globaldata(getdata())
+  })
+  
   ######################################################################################  OUTPUTS
   ######################################################################################  OUTPUTS
+  
+  ######################################################################################  SELECT AND FILTER
+  
+  output$charfilters <- renderUI({
+    charcols <- get_colsoftype(getdatadeleted(), 'character')
+    lapply(charcols, function(col) {
+      selectInput(col, col, choices = unique(getdata() %>% pull(col)), multiple = T, selected = NULL)
+    })
+  })
+  
+  output$numfilters <- renderUI({
+    numcols <- get_colsoftype(getdatadeleted(), c('numeric', 'integer'))
+    lapply(numcols, function(col) {
+      colrange <- range(getdata() %>% pull(col), na.rm = T)
+      sliderInput(col, col, min = colrange[1], max = colrange[2], 
+                  value = c(colrange[1], colrange[2]))
+    })
+  })
+  
+  output$whichcolumnsdelete <- renderUI({
+    selectInput('whichcolumnsdelete', 'Choose columns to delete', choices = colnames(getdata()),
+                multiple = T, selected = NULL)
+  })
+  
+  ######################################################################################  View data
+  
+  output$viewdata <- DT::renderDataTable({
+    datatable(getdatafiltered(), options = list(
+      autowidth = F, scrollY = T, searching = T, searchHighlight = T, pageLength = 20
+    ))
+  })
   
   ######################################################################################  OVERVIEW
   
@@ -256,29 +303,6 @@ shinyServer(function(input, output, session) {
       layout(title = paste0('Distribution of ', input$selectcolfordist))
   })
   
-  ######################################################################################  SELECT AND FILTER
-  
-  output$charfilters <- renderUI({
-    charcols <- get_colsoftype(getdatadeleted(), 'character')
-    lapply(charcols, function(col) {
-      selectInput(col, col, choices = unique(getdata() %>% pull(col)), multiple = T, selected = NULL)
-    })
-  })
-  
-  output$numfilters <- renderUI({
-    numcols <- get_colsoftype(getdatadeleted(), c('numeric', 'integer'))
-    lapply(numcols, function(col) {
-      colrange <- range(getdata() %>% pull(col), na.rm = T)
-      sliderInput(col, col, min = colrange[1], max = colrange[2], 
-                  value = c(colrange[1], colrange[2]))
-    })
-  })
-  
-  output$whichcolumnsdelete <- renderUI({
-    selectInput('whichcolumnsdelete', 'Choose columns to delete', choices = colnames(getdata()),
-                multiple = T, selected = NULL)
-  })
-  
   ######################################################################################  CLEAN DATA
   
   output$infoboxNAcolumns <- renderInfoBox({
@@ -317,12 +341,12 @@ shinyServer(function(input, output, session) {
   
   output$correlationplot <- renderPlotly({
     validate(need(is.null(input$datafile) == F, 'Please select data.'))
-    mat <- get_cormat(getdatafiltered(), maxFactor = maxFactorsForCor)
+    mat <- get_cormat(getdatafiltered(), maxFactor = maxFactorsForCor, NAtoZero = T)
     showNotification(paste0('One hot encoding is used for character columns. If more than ', maxFactorsForCor,
                             ' factors in a column, than this column will not be considered.'),  
                      type = 'message', duration = 10)
-    plot_ly(x = colnames(mat), y = colnames(mat), z = mat, type = 'heatmap', colors = 'PiYG') %>%
-      add_plotlayout() %>%
+    plot_ly(x = colnames(mat), y = colnames(mat), z = round(mat, digits = 4), 
+            type = 'heatmap', colors = 'PiYG') %>% add_plotlayout() %>%
       layout(title = 'Correlations')
   })
   
