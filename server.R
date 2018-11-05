@@ -63,6 +63,13 @@ shinyServer(function(input, output, session) {
     intersect(names(nas[nas > 0]), numcols)
   })
   
+  ######################################################################################  FEATURE SELECTION STUFF
+  
+  getfeatimptable <- eventReactive(input$calcfeatureimp, {
+    generateFilterValuesData(task = gettask(), learner = getlearner(), 
+                             method = featimp_dict[[input$featureselectmethod]])$data
+  })
+  
   ######################################################################################  COUNT FILTERS
   
   getnumberfilters <- reactive({
@@ -81,7 +88,7 @@ shinyServer(function(input, output, session) {
   
   ######################################################################################  MODEL STUFF
   
-  prepareDataForLearn <- eventReactive(input$learnmodel, {
+  prepareDataForLearn <- eventReactive(c(input$learnmodel, input$calcfeatureimp), ignoreInit = T, {
     tmpdat <- globaldata() %>% make_strToFactors() %>% make_conformColnames()
     dummiealgos <- paste0(gettaskPrefix(),  c('lm'))
     if (getalgo() %in% dummiealgos) {
@@ -100,6 +107,29 @@ shinyServer(function(input, output, session) {
     paste0(gettaskPrefix(), algo)
   })
   
+  gettask <- reactive({
+    if (input$learnchoosetask == 'Regression') {
+      task = makeRegrTask('task', data = prepareDataForLearn(), target = input$learnchoosetarget)
+    } else if (input$learnchoosetask == 'Classification') {
+      task = makeClassifTask('task', data = prepareDataForLearn(), target = input$learnchoosetarget)
+    }
+    task
+  })
+  
+  getlearner <- reactive({
+    # create a list of parameters for the algorithm
+    params <- algos_dict[[learningalgos_dict[[input$learnchoosealgo]]]]$parameter
+    if (is_empty(params) == F) {
+      for (param in names(params)) {
+        if (input[[param]] != '') {
+          params[[param]] <- as.numeric(input[[param]])
+        }
+      }
+      params <- params[!unlist(lapply(params, is.null))]
+    }
+    makeLearner(cl = getalgo(), par.vals = params)
+  })
+  
   learnmodel <- eventReactive(input$learnmodel, {
     
     # check whether NAs exist and if they can be handled by the algorithm
@@ -111,11 +141,7 @@ shinyServer(function(input, output, session) {
     }
     
     # create a task 
-    if (input$learnchoosetask == 'Regression') {
-      task = makeRegrTask('task', data = prepareDataForLearn(), target = input$learnchoosetarget)
-    } else if (input$learnchoosetask == 'Classification') {
-      task = makeClassifTask('task', data = prepareDataForLearn(), target = input$learnchoosetarget)
-    }
+    task <- task()
     
     # create a validation desc 
     if (input$choosevalidationstrat == 'Holdout'){
@@ -123,20 +149,9 @@ shinyServer(function(input, output, session) {
     } else if (input$choosevalidationstrat == 'Cross validation') {
       desc <- makeResampleDesc(method = 'CV', iters = input$parameterforvalidationstrat)
     }
-    
-    # create a list of parameters for the algorithm
-    params <- algos_dict[[learningalgos_dict[[input$learnchoosealgo]]]]$parameter
-    if (is_empty(params) == F) {
-      for (param in names(params)) {
-        if (input[[param]] != '') {
-          params[[param]] <- as.numeric(input[[param]])
-        }
-      }
-      params <- params[!unlist(lapply(params, is.null))]
-    }
 
-    # create learner 
-    learner <- makeLearner(cl = getalgo(), par.vals = params)
+    # create learner (parameters in getlearner function)
+    learner <- getlearner()
     
     # train models if the validation strategy is not None
     if (input$choosevalidationstrat != 'None') {
@@ -348,6 +363,25 @@ shinyServer(function(input, output, session) {
     plot_ly(x = colnames(mat), y = colnames(mat), z = round(mat, digits = 4), 
             type = 'heatmap', colors = 'PiYG') %>% add_plotlayout() %>%
       layout(title = 'Correlations')
+  })
+  
+  ######################################################################################  FEATURE SELECTION
+  
+  output$featureselectthreshold <- renderUI({
+    if (input$featureselecttreshtype == 'Percentage') {
+      sliderInput('featureselectthreshold', 'Select threshold', min = 0, max = 1, value = 0.5)
+    } else if (input$featureselecttreshtype == 'Absolute number') {
+      sliderInput('featureselectthreshold', 'Select threshold', min = 1, max = dim(globaldata())[2] - 2,
+                  value = round(dim(globaldata())[2] / 2))
+    }
+  })
+  
+  output$featimpplot <- renderPlotly({
+    validate(need(is.null(input$datafile) == F, 'Please select data.'))
+    table <- getfeatimptable()
+    plot_ly(y = orderXfactors(table[, 1], table[, 3], decr = F), x = table[, 3], type = 'bar', color = 'pink') %>%
+      add_plotlayout() %>%
+      layout(title = 'Feature importance')
   })
   
   ######################################################################################  TEXT ANALYSIS

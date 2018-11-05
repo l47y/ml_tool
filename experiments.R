@@ -38,14 +38,15 @@
 
 titanic = read_csv('/home/nicolas/Escritorio/Kaggle and other data/Titanic/train.csv') 
 titanic %<>% select(-Ticket, -Name, -PassengerId) %>% 
-  make_conformColnames() %>% make_strToFactors() %>% createDummyFeatures()
+  make_conformColnames() %>% delete_colsWithManyFactors() %>% make_strToFactors() %>% createDummyFeatures()
 task = makeClassifTask(data = titanic, target = 'Survived')
-params = algos_dict[['rpart']]$parameter
-params$minbucket = 1
-params$maxdepth = 1
-params = params[!unlist(lapply(params, is.null))]
-learner = makeLearner(cl = 'classif.rpart', par.vals = params)
-desc = makeResampleDesc(method = 'CV', iter = 4)
+# params = algos_dict[['rpart']]$parameter
+# params$minbucket = 1
+# params$maxdepth = 1
+# params = params[!unlist(lapply(params, is.null))]
+learner = makeLearner(cl = 'classif.rpart')
+#desc = makeResampleDesc(method = 'CV', iter = 4)
+
 
 model = resample(learner = learner, task = task, resampling = desc, 
                  measures = lapply(list("acc", "acc"), function(str){eval(parse(text = str))}))

@@ -49,11 +49,8 @@ delete_colsWithManyFactors <- function(data, maxFactor = 10, onlyNames = F) {
 }
 
 get_cormat <- function(data, maxFactor = 10, NAtoZero = T) {
-  print(dim(data)[2])
   data <- delete_colsWithManyFactors(data, maxFactor) %>% make_strToFactors()
-  print(dim(data)[2])
   dummies <- createDummyFeatures(data)
-  print(dim(dummies)[2])
   cormatrix <- cor(dummies)
   if (NAtoZero) {
     cormatrix[is.na(cormatrix)] <- 0
