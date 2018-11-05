@@ -10,6 +10,14 @@ shinyServer(function(input, output, session) {
   globaldata <- reactiveVal(NULL)
   model <- reactiveVal(NULL)
   
+  getdataOriginal <- reactive({
+    file <- input$datafile
+    if (is.null(file)) {
+      return(NULL) 
+    }
+    read_csv(file$datapath)
+  })
+  
   getdata <- reactive({
     file <- input$datafile
     if (is.null(file)) {
@@ -20,7 +28,7 @@ shinyServer(function(input, output, session) {
   })
   
   getdatadeleted <- reactive({
-    data <- globaldata()
+    data <- getdataOriginal()
     if (is.null(input$whichcolumnsdelete) == F) {
       data %<>% select(-one_of(input$whichcolumnsdelete))
     }
@@ -141,7 +149,7 @@ shinyServer(function(input, output, session) {
     }
     
     # create a task 
-    task <- task()
+    task <- gettask()
     
     # create a validation desc 
     if (input$choosevalidationstrat == 'Holdout'){
@@ -211,19 +219,22 @@ shinyServer(function(input, output, session) {
   })
   
   observeEvent(input$resetall, {
-    updateSelectInput(session, inputId = 'whichcolumnsdelete', selected = NULL, choices = colnames(getdata()))
+    
+    updateSelectInput(session, inputId = 'whichcolumnsdelete', selected = NULL, choices = colnames(getdataOriginal()))
 
-    numcols <- get_colsoftype(getdata(), c('numeric', 'integer'))
-    charcols <- get_colsoftype(getdata(), 'character')
+    numcols <- get_colsoftype(getdataOriginal(), c('numeric', 'integer'))
+    charcols <- get_colsoftype(getdataOriginal(), 'character')
 
     lapply(numcols, function(col) {
-      colrange <- range(getdata() %>% pull(col), na.rm = T)
+      colrange <- range(getdataOriginal() %>% pull(col), na.rm = T)
       updateSliderInput(session, inputId = col, value = c(colrange[1], colrange[2]))
     })
 
     lapply(charcols, function(col) {
-      updateSelectInput(session, inputId = col, selected = NULL, choices = unique(getdata() %>% pull(col)))
+      updateSelectInput(session, inputId = col, selected = NULL, choices = unique(getdataOriginal() %>% pull(col)))
     })
+    
+    globaldata(getdataOriginal())
   })
   
   observeEvent(input$ohe, {
@@ -239,7 +250,7 @@ shinyServer(function(input, output, session) {
   })
   
   observeEvent(input$resetohe, {
-    globaldata(getdata())
+    globaldata(getdatafiltered())
   })
   
   ######################################################################################  OUTPUTS
@@ -250,14 +261,14 @@ shinyServer(function(input, output, session) {
   output$charfilters <- renderUI({
     charcols <- get_colsoftype(getdatadeleted(), 'character')
     lapply(charcols, function(col) {
-      selectInput(col, col, choices = unique(getdata() %>% pull(col)), multiple = T, selected = NULL)
+      selectInput(col, col, choices = unique(getdataOriginal() %>% pull(col)), multiple = T, selected = NULL)
     })
   })
   
   output$numfilters <- renderUI({
     numcols <- get_colsoftype(getdatadeleted(), c('numeric', 'integer'))
     lapply(numcols, function(col) {
-      colrange <- range(getdata() %>% pull(col), na.rm = T)
+      colrange <- range(getdataOriginal() %>% pull(col), na.rm = T)
       sliderInput(col, col, min = colrange[1], max = colrange[2], 
                   value = c(colrange[1], colrange[2]))
     })
@@ -268,7 +279,7 @@ shinyServer(function(input, output, session) {
                 multiple = T, selected = NULL)
   })
   
-  ######################################################################################  View data
+  ######################################################################################  VIEW DATA
   
   output$viewdata <- DT::renderDataTable({
     datatable(getdatafiltered(), options = list(
@@ -280,8 +291,8 @@ shinyServer(function(input, output, session) {
   
   output$infoboxOriginalSize <- renderInfoBox({
     infoBox('Size of original data', 
-            HTML(paste0(dim(getdata())[1], ' rows<br>', 
-                        dim(getdata())[2], ' columns')),
+            HTML(paste0(dim(getdataOriginal())[1], ' rows<br>', 
+                        dim(getdataOriginal())[2], ' columns')),
             color = 'purple', width = 3)
   })
   
@@ -308,7 +319,7 @@ shinyServer(function(input, output, session) {
   })
   
   output$selectcolfordist <- renderUI({
-    selectInput('selectcolfordist', label = 'Select column', choices = colnames(getdatafiltered()))
+    selectInput('selectcolfordist', label = 'Select column', choices = colnames(globaldata()))
   })
   
   output$distplot <- renderPlotly({
