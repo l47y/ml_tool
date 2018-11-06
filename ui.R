@@ -182,11 +182,9 @@ ui <- dashboardPage(
           box(title = 'Settings for feature selection', collapsible = T, solidHeader = T, width = 4,
             selectInput('featureselectmethod', 'Select method', 
                         choices = unlist(featimp_dict$keys())),
-            selectInput('featureselecttreshtype', 'Select threshold type', 
-                        choices = c('Percentage', 'Absolute number')),
             uiOutput('featureselectthreshold'),
             actionButton('calcfeatureimp', 'Get feature importance'),
-            actionButton('deletefeaturesbythresh', 'Delete least important features')
+            actionButton('deletefeaturesbythresh', 'Delete least n important features')
           ),
           box(title = 'Visualisation of feature importance', collapsible = T, solidHeader = T, width = 7,
               plotlyOutput('featimpplot')    

@@ -1,3 +1,4 @@
+library(testit)
 
 orderXfactors <- function(toOrder, orderBy, decr = T) {
   return(factor(toOrder, levels = unique(as.character(toOrder[order(orderBy, decreasing = decr)]))))
@@ -60,5 +61,13 @@ get_cormat <- function(data, maxFactor = 10, NAtoZero = T) {
 
 getPage<-function(name) {
   return(includeHTML(name))
+}
+
+get_leastImportanceFeatures <- function(featimptable, number) {
+  if (number >= nrow(featimptable)) {
+    stop('You cant delete more features than are existing in the original data.')
+  } 
+  featimptable %<>% arrange_(names(featimptable)[3])
+  return (featimptable$name[1:number])
 }
 

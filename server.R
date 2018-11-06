@@ -75,7 +75,7 @@ shinyServer(function(input, output, session) {
   
   getfeatimptable <- eventReactive(input$calcfeatureimp, {
     generateFilterValuesData(task = gettask(), learner = getlearner(), 
-                             method = featimp_dict[[input$featureselectmethod]])$data
+                             method = featimp_dict[[input$featureselectmethod]]$name)$data
   })
   
   ######################################################################################  COUNT FILTERS
@@ -253,6 +253,14 @@ shinyServer(function(input, output, session) {
     globaldata(getdatafiltered())
   })
   
+  observeEvent(input$deletefeaturesbythresh, {
+    #featuresAlreadyDeleted <- input$whichcolumnsdelete
+    featuresToDelete <- get_leastImportanceFeatures(getfeatimptable(), input$featureselectthreshold)
+    # updateSelectInput(session, inputId = 'whichcolumnsdelete', 
+    #                   selected = c(featuresToDelete, featuresAlreadyDeleted))
+    globaldata(globaldata() %>% select(-one_of(featuresToDelete)))
+  })
+  
   ######################################################################################  OUTPUTS
   ######################################################################################  OUTPUTS
   
@@ -275,14 +283,14 @@ shinyServer(function(input, output, session) {
   })
   
   output$whichcolumnsdelete <- renderUI({
-    selectInput('whichcolumnsdelete', 'Choose columns to delete', choices = colnames(getdata()),
+    selectInput('whichcolumnsdelete', 'Choose columns to delete', choices = colnames(globaldata()),
                 multiple = T, selected = NULL)
   })
   
   ######################################################################################  VIEW DATA
   
   output$viewdata <- DT::renderDataTable({
-    datatable(getdatafiltered(), options = list(
+    datatable(globaldata(), options = list(
       autowidth = F, scrollY = T, searching = T, searchHighlight = T, pageLength = 20
     ))
   })
@@ -379,16 +387,18 @@ shinyServer(function(input, output, session) {
   ######################################################################################  FEATURE SELECTION
   
   output$featureselectthreshold <- renderUI({
-    if (input$featureselecttreshtype == 'Percentage') {
-      sliderInput('featureselectthreshold', 'Select threshold', min = 0, max = 1, value = 0.5)
-    } else if (input$featureselecttreshtype == 'Absolute number') {
-      sliderInput('featureselectthreshold', 'Select threshold', min = 1, max = dim(globaldata())[2] - 2,
+    validate(need(is.null(input$datafile) == F, 'Please select data.'))
+    sliderInput('featureselectthreshold', 'Select number of features to delete', 
+                min = 1, max = dim(globaldata())[2] - 2,
                   value = round(dim(globaldata())[2] / 2))
-    }
   })
   
   output$featimpplot <- renderPlotly({
     validate(need(is.null(input$datafile) == F, 'Please select data.'))
+    validate(need(
+      featimp_dict[[input$featureselectmethod]][[regclassif_dict[[input$learnchoosetask]]]] == T,
+      paste0('For ', input$learnchoosetask, ' the selected method is not available.')
+    ))
     table <- getfeatimptable()
     plot_ly(y = orderXfactors(table[, 1], table[, 3], decr = F), x = table[, 3], type = 'bar', color = 'pink') %>%
       add_plotlayout() %>%

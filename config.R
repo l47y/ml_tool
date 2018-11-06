@@ -36,10 +36,13 @@ learningalgos_dict[['Decision tree']] <- 'rpart'
 learningalgos_dict[['Logistic Regression']] <- 'logreg'
 
 featimp_dict <- dict()
-featimp_dict[['Random Forest']] <- 'randomForestSRC.rfsrc'
-featimp_dict[['Anova Test']] <- 'anova.test'
-featimp_dict[['Random Permutation']] <- 'permutation.importance'
-featimp_dict[['Correlation with target']] <- 'rank.correlation'
+featimp_dict[['Random Forest']] <- list(name = 'randomForest.importance', regr = F, classif = T)
+featimp_dict[['Anova Test']] <- list(name = 'anova.test', regr = F, classif = T)
+featimp_dict[['Correlation with target']] <- list(name = 'rank.correlation', regr = T, classif = F)
+
+regclassif_dict <- dict()
+regclassif_dict[['Regression']] <- 'regr'
+regclassif_dict[['Classification']] <- 'classif'
 
 ######################################################################################  ALGORITHMS
 
