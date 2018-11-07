@@ -35,7 +35,7 @@ ui <- dashboardPage(
       tabItem(
         tabName = 'SelectandFilterData',
         fluidPage(
-          box(title = 'Select file', collapsible = T, width = 2, solidHeader = T,
+          box(title = 'Select file', collapsible = T, width = 3, solidHeader = T,
               fileInput('datafile', 
                         'Choose Data',
                         multiple = FALSE,
@@ -44,11 +44,11 @@ ui <- dashboardPage(
                                    '.csv'))
           ),
           box(title = 'Delete columns', collapsible = T, width = 3, solidHeader = T,
-              uiOutput('whichcolumnsdelete')
+              uiOutput('whichcolumnsdelete'),
+              actionButton('applydelete', 'Apply Deletion')
           ),
-          box(title = 'Apply it!', collapsible = T, solidHeader = T, width = 3, 
+          box(title = 'Filter data', collapsible = T, solidHeader = T, width = 2, 
               actionButton('applyfilter', 'Apply Filter'),
-              actionButton('applydelete', 'Apply Deletion'),
               textOutput('initGlobaldata')
           ),
           box(title = 'Reset to original data', collapsible = T, width = 2, solidHeader = T,

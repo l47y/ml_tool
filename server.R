@@ -9,7 +9,8 @@ shinyServer(function(input, output, session) {
 
   globaldata <- reactiveVal(NULL)
   unencodeddata <- reactiveVal(NULL)
-  model <- reactiveVal(NULL)
+  #model <- reactiveVal(NULL)
+  filterlist <- reactiveVal(NULL)
   
   getdataOriginal <- reactive({
     file <- input$datafile
@@ -24,8 +25,10 @@ shinyServer(function(input, output, session) {
     if (is.null(file)) {
       return(NULL) 
     }
-    globaldata(read_csv(file$datapath))
-    read_csv(file$datapath)
+    dat <- read_csv(file$datapath)
+    globaldata(dat)
+    filterlist(setNames(as.list(rep(F, ncol(dat))), colnames(dat)))
+    dat
   })
   
   ######################################################################################  MISSING DATA STUFF
@@ -51,22 +54,6 @@ shinyServer(function(input, output, session) {
   getfeatimptable <- eventReactive(input$calcfeatureimp, {
     generateFilterValuesData(task = gettask(), learner = getlearner(), 
                              method = featimp_dict[[input$featureselectmethod]]$name)$data
-  })
-  
-  ######################################################################################  COUNT FILTERS
-  
-  getnumberfilters <- reactive({
-    count <- 0
-    for (col in colnames(getdata())) {
-      if (class(getdata() %>% pull(col)) == 'character') {
-        if (is.null(input[[col]]) == F) {count <- count + 1}
-      } else if (class(getdata() %>% pull(col)) %in% c('numeric', 'integer')) {
-        colrange <- range(getdata() %>% pull(col), na.rm = T)
-        if (input[[col]][1] != colrange[1]) {count <- count + 1}
-        if (input[[col]][2] != colrange[2]) {count <- count + 1}
-      }
-    }
-    count
   })
   
   ######################################################################################  MODEL STUFF
@@ -107,7 +94,6 @@ shinyServer(function(input, output, session) {
     tryCorrectFormat <- list()
     for (param in params) {
       if (input[[param]] != '') {
-        print(paste0(param, ' wird gecheckt'))
         typeRequired <- paramSet[[param]]$type
         actualValue <- input[[param]]
         conversion <- paste0("as.", typeRequired)
@@ -193,17 +179,26 @@ shinyServer(function(input, output, session) {
   
   observeEvent(input$applyfilter, {
     data <- globaldata()
+    whichFiltersAreSet <- filterlist()
     for (col in colnames(data)) {
       if (is.null(input[[col]])) {next()}
-      if (class(data %>% pull(col)) == 'character') {
+      if (class(data %>% pull(col)) %in% c('factor', 'character')) {
         data %<>% filter(!! as.name(col) %in% input[[col]])
+        whichFiltersAreSet[[col]] <- T
+        
       } else if (class(data %>% pull(col)) %in% c('numeric', 'integer')) {
         datcol <- data %>% pull(!! as.name(col))
         ind <- (datcol >= input[[col]][1] & datcol <= input[[col]][2])
         ind <- ind %in% c(T, NA)
+        if (sum(ind) < nrow(data)) {
+          whichFiltersAreSet[[col]] <- T
+        }
         data <- data[ind, ]
       }
+      
     }
+    filterlist(whichFiltersAreSet)
+    print(filterlist())
     globaldata(data)
   })
   
@@ -262,7 +257,7 @@ shinyServer(function(input, output, session) {
     lapply(charcols, function(col) {
       updateSelectInput(session, inputId = col, selected = NULL, choices = unique(getdataOriginal() %>% pull(col)))
     })
-    
+    filterlist(setNames(as.list(rep(F, ncol(getdataOriginal()))), colnames(getdataOriginal())))
     globaldata(getdataOriginal())
   })
   
@@ -344,7 +339,7 @@ shinyServer(function(input, output, session) {
   })
   
   output$infoboxNumberfilters <- renderInfoBox({
-    infoBox('Active filters', getnumberfilters(), color = 'aqua', width = 3)
+    infoBox('Active filters', sum(unlist(filterlist(), use.names = F)), color = 'aqua', width = 3)
   })
   
   output$missingvalues <- renderPlotly({
@@ -447,6 +442,8 @@ shinyServer(function(input, output, session) {
   
   output$textcloud <- renderWordcloud2({
     validate(need(is.null(input$datafile) == F, 'Please select data.'))
+    validate(need(length(get_colsoftype(globaldata(), 'character')) > 0, 
+                  'No character columns in data.'))
     wordtab <- get_wordfreq(globaldata() %>% pull(input$selectcolumnfortextcloud))
     wordcloud2(wordtab, backgroundColor = 'grey48', size = input$textcloudsize, color = "random-light")
   })
