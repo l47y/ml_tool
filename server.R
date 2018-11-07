@@ -8,8 +8,10 @@ shinyServer(function(input, output, session) {
   ######################################################################################  DATA STUFF
   
   globaldata <- reactiveVal(NULL)
+  trainingdata <- reactiveVal(NULL)
+  testingdata <- reactiveVal(NULL)
   unencodeddata <- reactiveVal(NULL)
-  models <- list(NULL)
+  models <- reactiveVal(NULL)
   countHowManyModels <- reactiveVal(1)
   filterlist <- reactiveVal(NULL)
 
@@ -18,7 +20,7 @@ shinyServer(function(input, output, session) {
     if (is.null(file)) {
       return(NULL) 
     }
-    read_csv(file$datapath)
+    read_csv(file$datapath) %>% make_conformColnames()
   })
   
   getdata <- reactive({
@@ -26,7 +28,7 @@ shinyServer(function(input, output, session) {
     if (is.null(file)) {
       return(NULL) 
     }
-    dat <- read_csv(file$datapath)
+    dat <- read_csv(file$datapath) %>% make_conformColnames()
     globaldata(dat)
     filterlist(setNames(as.list(rep(F, ncol(dat))), colnames(dat)))
     dat
@@ -60,7 +62,7 @@ shinyServer(function(input, output, session) {
   ######################################################################################  MODEL STUFF
   
   prepareDataForLearn <- eventReactive(c(input$learnmodel, input$calcfeatureimp), ignoreInit = T, {
-    tmpdat <- globaldata() %>% make_strToFactors() %>% make_conformColnames()
+    tmpdat <- globaldata() %>% make_strToFactors() 
     dummiealgos <- paste0(gettaskPrefix(),  c('lm'))
     if (getalgo() %in% dummiealgos) {
       tmpdat %<>% createDummyFeatures()
@@ -79,10 +81,15 @@ shinyServer(function(input, output, session) {
   })
   
   gettask <- reactive({
+    trainTestSplit <- round(input$percentageoftestingdata * nrow(prepareDataForLearn()))
+    dataForTraining <- prepareDataForLearn()[1:trainTestSplit, ]
+    dataForTesting <- prepareDataForLearn()[(trainTestSplit + 1):nrow(prepareDataForLearn()), ]
+    trainingdata(dataForTraining)
+    testingdata(dataForTesting)
     if (input$learnchoosetask == 'Regression') {
-      task = makeRegrTask('task', data = prepareDataForLearn(), target = input$learnchoosetarget)
+      task = makeRegrTask('task', data = trainingdata(), target = input$learnchoosetarget)
     } else if (input$learnchoosetask == 'Classification') {
-      task = makeClassifTask('task', data = prepareDataForLearn(), target = input$learnchoosetarget)
+      task = makeClassifTask('task', data = trainingdata(), target = input$learnchoosetarget)
     }
     task
   })
@@ -106,7 +113,7 @@ shinyServer(function(input, output, session) {
     }
     couldNotBeConverted <- names(tryCorrectFormat[is.na(tryCorrectFormat)])
     validate(need(!length(couldNotBeConverted) > 0,
-                 paste0('The following parameters are in the wrong formats: ',
+                 paste0('The following parameters are in the wrong format: ',
                         paste(couldNotBeConverted, collapse = ' '))))
     
     # create a list of parameters for the algorithm and construct learner
@@ -164,9 +171,12 @@ shinyServer(function(input, output, session) {
     
     # train a final model and add it to the modellist of trained models
     model <- train(task = task, learner = learner)
-    models[[countHowManyModels()]] <- list('model' = mode, 'resample' = resample$measures.test)
+    newModels <- models()
+    newModels[[countHowManyModels()]] <- list('model' = model, 'resample' = resample$measures.test)
+    models(newModels)
     countHowManyModels(countHowManyModels() + 1)
-    print(resample$measures.test)
+    print(countHowManyModels())
+    print(length(models()))
     list('model' = model, 'learner' = learner, 'task' = task, 'resample' = resample$measures.test)
   })
   
@@ -202,7 +212,6 @@ shinyServer(function(input, output, session) {
       
     }
     filterlist(whichFiltersAreSet)
-    print(filterlist())
     globaldata(data)
   })
   
@@ -294,9 +303,14 @@ shinyServer(function(input, output, session) {
     mat[lower.tri(mat, diag = T)] <- 0
     whereHighCorrFeatures <- apply(mat, 1, function(row){any(row > input$thresholdfordeletehighcorr)})
     whichColsDelete <- names(whereHighCorrFeatures[whereHighCorrFeatures])
+    whichColsDelete <- setdiff(whichColsDelete, input$learnchoosetarget)
     globaldata(globaldata() %>% select(-one_of(whichColsDelete)))
   })
 
+  observeEvent(input$removeconstantfeatures, {
+    globaldata(globaldata() %>% removeConstantFeatures())
+  })
+  
   ######################################################################################  OUTPUTS
   ######################################################################################  OUTPUTS
   
@@ -508,25 +522,30 @@ shinyServer(function(input, output, session) {
     if (input$choosevalidationstrat != 'None') {
       if (input$learnchoosetask == 'Regression') {
         selectInput('performancemeasures', 'Performance measures', 
-                    choices = c('mse', 'rsq'), multiple = T, selected = 'rsq')
+                    choices = c('mse', 'rsq'), multiple = F, selected = 'rsq')
       } else if (input$learnchoosetask == 'Classification') {
         selectInput('performancemeasures', 'Performance measures', 
-                    choices = c('acc'), selected = 'acc')
+                    choices = c('acc'), selected = 'acc', multiple = F)
       } 
     }
   })
   
   output$plotperformanceoverview <- renderPlotly({
     validate(need(is.null(input$datafile) == F, 'Please select data.'))
-    preds <- predict(learnmodel()$model, newdata = prepareDataForLearn()) 
+    if (input$showtrainortestperformance == 'Performance on training data') {
+      preds <- predict(learnmodel()$model, newdata = trainingdata()) 
+    } else {
+      preds <- predict(learnmodel()$model, newdata = testingdata()) 
+    }
     if (input$learnchoosetask == 'Regression') {
       p <- plot_ly(x = preds$data$truth, y = preds$data$response, type = 'scatter', mode = 'markers',
               color = 'pink')
     } else if(input$learnchoosetask == 'Classification') {
       preds <- preds$data %>% group_by(response, truth) %>% summarize(n = n())
-      p <- plot_ly(x = preds$response, y = preds$truth, z = preds$n, type = 'heatmap', colors = 'PiYG') 
+      p <- plot_ly(x = preds$response, y = preds$truth, z = preds$n, type = 'heatmap') 
     }
-    p %<>% add_plotlayout() %>% layout(xaxis = list(title = 'Target'), yaxis = list(title = 'Prediction'))
+    p %<>% add_plotlayout() %>% layout(xaxis = list(title = 'Target'), yaxis = list(title = 'Prediction'),
+                                       title = 'Predictive performance')
   })
   
   output$testperformancetable <- renderTable({
@@ -537,11 +556,18 @@ shinyServer(function(input, output, session) {
 
   ######################################################################################  COMPARE MODELS 
   
-  # output$modelcomparisonplot <- renderPlotly({
-  #   validate(need(length(models) > 0, 'No models trained yet.'))
-  #   
-  #   plot_ly(x = 1:length(models), y = )
-  # })
+  output$modelcomparisonplot <- renderPlotly({
+    validate(need(length(models()) > 0, 'No models trained yet.'))
+    performanceOfModels <- rep(0, length(models())) 
+    for (i in 1:length(models())) {
+      preds <- predict(models()[[i]]$model, newdata = testingdata()) 
+      performanceOfModels[i] <- performance(preds, measures = lapply(list(input$performancemeasures), 
+                                                                     function(str){eval(parse(text = str))}))
+    }
+    plot_ly(x = 1:length(models()), y = performanceOfModels, type = 'bar', color = 'pink') %>% 
+      add_plotlayout() %>% layout(title = 'Comparison of trained models', xaxis = list(title = 'Model'), 
+                                  yaxis = list(title = paste0(input$performancemeasures), ' on test data'))
+  })
   
   ######################################################################################  DOCUMENTATION
   

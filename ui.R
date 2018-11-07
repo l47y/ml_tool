@@ -15,7 +15,7 @@ ui <- dashboardPage(
                 menuItem('Correlations and OHE', tabName = 'Correlations', icon = icon('indent-right', lib = 'glyphicon')),
                 menuItem('Feature selection', tabName = 'Featureselection', icon = icon('share', lib = 'glyphicon')),
                 menuItem('Learn model', tabName = 'LearnModel', icon = icon('random', lib = 'glyphicon')),
-                menuItem('Compare models', tabName = 'CompareModel', icon = icon('signal', lib = 'glyphicon')),
+                menuItem('Compare models', tabName = 'CompareModels', icon = icon('signal', lib = 'glyphicon')),
                 menuItem('Documentation', tabName = 'Documentation', icon = icon('list-alt', lib = 'glyphicon'))
                 
     )
@@ -105,13 +105,13 @@ ui <- dashboardPage(
         fluidPage(
           infoBoxOutput('infoboxNAcolumns'),
           column(12,
-            box(title = 'Character columns', solidHeader = T, width = 4, collapsible = T,
+            box(title = 'Remove missings in character columns', solidHeader = T, width = 4, collapsible = T,
                 uiOutput('selectNAcharactercolumns'),
                 selectInput('strategyNAchar', 'Select strategy to treat NAs', 
                             choices = c('Most frequent', 'According to distribution')),
                 actionButton('imputeNAchar', 'Impute NAs')
             ),
-            box(title = 'Numeric columns', solidHeader = T, width = 4, collapsible = T,
+            box(title = 'Remove missings in numeric columns', solidHeader = T, width = 4, collapsible = T,
                 uiOutput('selectNAnumericcolumns'),
                 selectInput('strategyNAnum', 'Select strategy to treat NAs', 
                             choices = c('Median', 'Mean', 'Set to zero')),
@@ -119,6 +119,11 @@ ui <- dashboardPage(
             ),
             box(title = 'Reset', solidHeader = T, width = 2, collapsible = T,
                 actionButton('resetNaTreats', 'Reset Imputing')
+            ),
+            column(12, 
+              box(title = 'Remove constant features', solidHeader = T, width = 3, collapsible = T,
+                  actionButton('removeconstantfeatures', 'Remove constant features')
+              )
             )
           )
         )
@@ -200,17 +205,21 @@ ui <- dashboardPage(
           box(title = 'Algorithm parameters', collapsible = T, solidHeader = T, width = 3,
               uiOutput('parametersofalgo')
           ),
-          box(title = 'Validation strategy', collapsible = T, solidHeader = T, width = 3,
+          box(title = 'Validation and testing', collapsible = T, solidHeader = T, width = 3,
               selectInput('choosevalidationstrat', 'Choose validation strategy', 
                           choices = c('Holdout', 'Cross validation', 'None')),
               uiOutput('parameterforvalidationstrat'),
-              uiOutput('performancemeasures')
+              uiOutput('performancemeasures'),
+              sliderInput('percentageoftestingdata', 'Choose percentage of final testing data', min = 0.01, max = 0.99, 
+                          value = 0.2)
           ),
           box(title = 'Learn it!', collapsible = T, solidHeader = T, width = 3,
               actionButton('learnmodel', 'Learn model')
           ),
           column(12, 
             box(title = 'Performance overview', collapsible = T, solidHeader = T, width = 7,
+                selectInput('showtrainortestperformance', 'What to show?', 
+                            choices = c('Performance on training data', 'Performance on testing data')),
                 plotlyOutput('plotperformanceoverview')
             ),
             box(title = 'Testing performance', collapsible = T, solidHeader = T, width = 3,
