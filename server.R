@@ -6,8 +6,9 @@ shinyServer(function(input, output, session) {
   ######################################################################################  REACTIVES
   
   ######################################################################################  DATA STUFF
-  
+
   globaldata <- reactiveVal(NULL)
+  unencodeddata <- reactiveVal(NULL)
   model <- reactiveVal(NULL)
   
   getdataOriginal <- reactive({
@@ -27,32 +28,6 @@ shinyServer(function(input, output, session) {
     read_csv(file$datapath)
   })
   
-  getdatadeleted <- reactive({
-    data <- getdataOriginal()
-    if (is.null(input$whichcolumnsdelete) == F) {
-      data %<>% select(-one_of(input$whichcolumnsdelete))
-    }
-    globaldata(data)
-    data
-  })
-
-  getdatafiltered <- reactive({
-    data <- getdatadeleted()
-    for (col in colnames(data)) {
-      if (is.null(input[[col]])) {next()}
-      if (class(data %>% pull(col)) == 'character') {
-        data %<>% filter(!! as.name(col) %in% input[[col]])
-      } else if (class(data %>% pull(col)) %in% c('numeric', 'integer')) {
-        datcol <- data %>% pull(!! as.name(col))
-        ind <- (datcol >= input[[col]][1] & datcol <= input[[col]][2])
-        ind <- ind %in% c(T, NA)
-        data <- data[ind, ]
-      }
-    }
-    globaldata(data)
-    data
-  })
-
   ######################################################################################  MISSING DATA STUFF
   
   getnumbermissings <- reactive({
@@ -60,13 +35,13 @@ shinyServer(function(input, output, session) {
   })
   
   getcharnas <- reactive({
-    charcols <- get_colsoftype(getdatafiltered(), 'character')
+    charcols <- get_colsoftype(globaldata(), 'character')
     nas <- getnumbermissings() 
     intersect(names(nas[nas > 0]), charcols)
   })
   
   getnumnas <- reactive({
-    numcols <- get_colsoftype(getdatafiltered(), c('numeric', 'integer'))
+    numcols <- get_colsoftype(globaldata(), c('numeric', 'integer'))
     nas <- getnumbermissings() 
     intersect(names(nas[nas > 0]), numcols)
   })
@@ -178,6 +153,30 @@ shinyServer(function(input, output, session) {
   ######################################################################################  OBSERVE
   ######################################################################################  OBSERVE
   
+  observeEvent(input$applydelete, {
+    data <- globaldata()
+    if (is.null(input$whichcolumnsdelete) == F) {
+      data %<>% select(-one_of(input$whichcolumnsdelete))
+    }
+    globaldata(data)
+  })
+  
+  observeEvent(input$applyfilter, {
+    data <- globaldata()
+    for (col in colnames(data)) {
+      if (is.null(input[[col]])) {next()}
+      if (class(data %>% pull(col)) == 'character') {
+        data %<>% filter(!! as.name(col) %in% input[[col]])
+      } else if (class(data %>% pull(col)) %in% c('numeric', 'integer')) {
+        datcol <- data %>% pull(!! as.name(col))
+        ind <- (datcol >= input[[col]][1] & datcol <= input[[col]][2])
+        ind <- ind %in% c(T, NA)
+        data <- data[ind, ]
+      }
+    }
+    globaldata(data)
+  })
+  
   observeEvent(input$imputeNAchar, {
     
     if (is.null(input$selectNAcharactercolumns) == F) {
@@ -239,6 +238,7 @@ shinyServer(function(input, output, session) {
   
   observeEvent(input$ohe, {
     tmpdat <- globaldata() 
+    unencodeddata(globaldata())
     colsWithManyFactors <- delete_colsWithManyFactors(tmpdat, input$maxfactorsOHE, onlyNames = T)
     allPossiblycols <- get_colsoftype(tmpdat, 'character')
     OHEcols <- setdiff(allPossiblycols, colsWithManyFactors)
@@ -250,14 +250,11 @@ shinyServer(function(input, output, session) {
   })
   
   observeEvent(input$resetohe, {
-    globaldata(getdatafiltered())
+    globaldata(unencodeddata())
   })
   
   observeEvent(input$deletefeaturesbythresh, {
-    #featuresAlreadyDeleted <- input$whichcolumnsdelete
     featuresToDelete <- get_leastImportanceFeatures(getfeatimptable(), input$featureselectthreshold)
-    # updateSelectInput(session, inputId = 'whichcolumnsdelete', 
-    #                   selected = c(featuresToDelete, featuresAlreadyDeleted))
     globaldata(globaldata() %>% select(-one_of(featuresToDelete)))
   })
   
@@ -267,16 +264,16 @@ shinyServer(function(input, output, session) {
   ######################################################################################  SELECT AND FILTER
   
   output$charfilters <- renderUI({
-    charcols <- get_colsoftype(getdatadeleted(), 'character')
+    charcols <- get_colsoftype(globaldata(), c('character', 'factor'))
     lapply(charcols, function(col) {
-      selectInput(col, col, choices = unique(getdataOriginal() %>% pull(col)), multiple = T, selected = NULL)
+      selectInput(col, col, choices = unique(globaldata() %>% pull(col)), multiple = T, selected = NULL)
     })
   })
   
   output$numfilters <- renderUI({
-    numcols <- get_colsoftype(getdatadeleted(), c('numeric', 'integer'))
+    numcols <- get_colsoftype(globaldata(), c('numeric', 'integer'))
     lapply(numcols, function(col) {
-      colrange <- range(getdataOriginal() %>% pull(col), na.rm = T)
+      colrange <- range(globaldata() %>% pull(col), na.rm = T)
       sliderInput(col, col, min = colrange[1], max = colrange[2], 
                   value = c(colrange[1], colrange[2]))
     })
@@ -285,6 +282,11 @@ shinyServer(function(input, output, session) {
   output$whichcolumnsdelete <- renderUI({
     selectInput('whichcolumnsdelete', 'Choose columns to delete', choices = colnames(globaldata()),
                 multiple = T, selected = NULL)
+  })
+  
+  output$initGlobaldata <- renderText({
+    getdata()
+    print('')
   })
   
   ######################################################################################  VIEW DATA
@@ -317,7 +319,7 @@ shinyServer(function(input, output, session) {
   
   output$missingvalues <- renderPlotly({
     validate(need(is.null(input$datafile) == F, 'Please select data.'))
-    nas <- round(getnumbermissings() / dim(getdatafiltered())[1], digits = 4)
+    nas <- round(getnumbermissings() / dim(globaldata())[1], digits = 4)
     nas <- nas[nas > 0]
     validate(need(is_empty(nas) == F, 'No NAs in data.'))
     plot_ly(y = orderXfactors(names(nas), nas, decr = F), x = nas, type = 'bar', color = 'pink') %>%
@@ -358,12 +360,12 @@ shinyServer(function(input, output, session) {
   ######################################################################################  DETAILED ANALYSIS
   
   output$selectColumn1plot1 <- renderUI({
-    selectInput('selectColumn1plot1', 'Select 1st column', choices = colnames(getdatadeleted()), 
+    selectInput('selectColumn1plot1', 'Select 1st column', choices = colnames(globaldata()), 
                 selected = NULL, width = NULL )
   })
   
   output$selectColumn2plot1 <- renderUI({
-    selectInput('selectColumn2plot2', 'Select 2nd column', choices = colnames(getdatadeleted()), 
+    selectInput('selectColumn2plot2', 'Select 2nd column', choices = colnames(globaldata()), 
                 selected = NULL, width = NULL)
   })
   
@@ -375,7 +377,7 @@ shinyServer(function(input, output, session) {
   
   output$correlationplot <- renderPlotly({
     validate(need(is.null(input$datafile) == F, 'Please select data.'))
-    mat <- get_cormat(getdatafiltered(), maxFactor = maxFactorsForCor, NAtoZero = T)
+    mat <- get_cormat(globaldata(), maxFactor = maxFactorsForCor, NAtoZero = T)
     showNotification(paste0('One hot encoding is used for character columns. If more than ', maxFactorsForCor,
                             ' factors in a column, than this column will not be considered.'),  
                      type = 'message', duration = 10)
@@ -409,13 +411,13 @@ shinyServer(function(input, output, session) {
   
   output$selectcolumnfortextcloud <- renderUI({
     selectInput('selectcolumnfortextcloud', 'Select column for wordcloud',
-                choices = get_colsoftype(getdatadeleted(), 'character'),
+                choices = get_colsoftype(globaldata(), 'character'),
                 selected = NULL, width = 250)
   })
   
   output$textcloud <- renderWordcloud2({
     validate(need(is.null(input$datafile) == F, 'Please select data.'))
-    wordtab <- get_wordfreq(getdatafiltered() %>% pull(input$selectcolumnfortextcloud))
+    wordtab <- get_wordfreq(globaldata() %>% pull(input$selectcolumnfortextcloud))
     wordcloud2(wordtab, backgroundColor = 'grey48', size = input$textcloudsize, color = "random-light")
   })
   
@@ -434,7 +436,7 @@ shinyServer(function(input, output, session) {
   })
   
   output$learnchoosetarget <- renderUI({
-    selectInput('learnchoosetarget', 'Choose target variable', choices = colnames(getdatadeleted()))
+    selectInput('learnchoosetarget', 'Choose target variable', choices = colnames(globaldata()))
   })
   
   output$parametersofalgo <- renderUI({

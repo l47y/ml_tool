@@ -17,6 +17,7 @@ library(na.tools)
 library(tidyimpute)
 library(DT)
 library(dict)
+library(shinyjs)
 
 ######################################################################################  GENERAL SETTINGS
 
