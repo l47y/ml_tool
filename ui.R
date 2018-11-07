@@ -1,22 +1,21 @@
-source('config.R')
 
 ui <- dashboardPage(
   
   dashboardHeader(
-    title = 'Tool'
+    title = 'ml_tool'
   ),
   
   dashboardSidebar(
     sidebarMenu(id = 'sidebarmenu',
                 menuItem('Select and Filter Data', tabName = 'SelectandFilterData',  icon = icon('database')),
-                menuItem('View data', tabName = 'Viewdata', icon = icon('align-justify', lib = 'glyphicon')),
+                menuItem('Show Data', tabName = 'ShowData', icon = icon('align-justify', lib = 'glyphicon')),
                 menuItem('Overview', tabName = 'Overview', icon = icon('eye')),
                 menuItem('Clean data', tabName = 'Cleandata', icon = icon('wrench', lib = 'glyphicon')),
-                menuItem('Detailed analysis', tabName = 'Detailedanalysis', icon = icon('signal', lib = 'glyphicon')),
-                menuItem('Correlations', tabName = 'Correlations', icon = icon('indent-right', lib = 'glyphicon')),
-                menuItem('Feature selection', tabName = 'Featureselection', icon = icon('share', lib = 'glyphicon')),
                 menuItem('Text analysis', tabName = 'Textanalysis', icon = icon('font')),
+                menuItem('Correlations and OHE', tabName = 'Correlations', icon = icon('indent-right', lib = 'glyphicon')),
+                menuItem('Feature selection', tabName = 'Featureselection', icon = icon('share', lib = 'glyphicon')),
                 menuItem('Learn model', tabName = 'LearnModel', icon = icon('random', lib = 'glyphicon')),
+                menuItem('Compare models', tabName = 'CompareModel', icon = icon('signal', lib = 'glyphicon')),
                 menuItem('Documentation', tabName = 'Documentation', icon = icon('list-alt', lib = 'glyphicon'))
                 
     )
@@ -69,7 +68,7 @@ ui <- dashboardPage(
       ###################################################################################### 
       
       tabItem(
-        tabName = 'Viewdata', 
+        tabName = 'ShowData', 
         fluidPage(
           DT::dataTableOutput('viewdata')
         )
@@ -124,24 +123,7 @@ ui <- dashboardPage(
           )
         )
       ),
-      
-      ######################################################################################  
-      ###################################################################################### 
-      
-      tabItem(
-        tabName = 'Detailedanalysis',
-        fluidPage(
-          box(title = 'Plot idea 1', solidHeader = T, width = 6, collapsible = T,
-            uiOutput('selectColumn1plot1', inline = T),
-            uiOutput('selectColumn2plot1', inline = T),
-            plotlyOutput('plotidea1')
-          ),
-          box(title = 'Plot idea 2', solidHeader = T, width = 6, collapsible = T,
-            plotlyOutput('plotidea2')    
-          )
-        )
-      ),
-      
+
       ######################################################################################  
       ###################################################################################### 
       
@@ -155,8 +137,14 @@ ui <- dashboardPage(
               actionButton('ohe', 'Encode data'),
               actionButton('resetohe', 'Reset encoding')
           ),
-          box(title = 'Correlations between variables', width = 8, collapsible = T, solidHeader = T,
-            plotlyOutput('correlationplot')
+          box(title = 'Delete high correlated features', width = 3, collapsible = T, solidHeader = T, 
+              sliderInput('thresholdfordeletehighcorr', 'Threshold for Deletion', min = 0, max = 0.99, value = 0.8),
+              actionButton('deletehighcorr', 'Delete correlated features')
+          ),
+          column(12,
+            box(title = 'Correlations between variables', width = 8, collapsible = T, solidHeader = T,
+              plotlyOutput('correlationplot')
+            )
           )
           
         )
@@ -228,6 +216,21 @@ ui <- dashboardPage(
             box(title = 'Testing performance', collapsible = T, solidHeader = T, width = 3,
                 shiny::tableOutput('testperformancetable')    
             )
+          )
+        )
+      ),
+      
+      ######################################################################################  
+      ###################################################################################### 
+      
+      tabItem(
+        tabName = 'CompareModels', 
+        fluidPage(
+          box('Model description', collapsible = T, width = 5, solidHeader = T,
+              tableOutput('modeldescriptiontable')
+          ),
+          box('Model comparison', collapsible = T, width = 7, solidHeader = T,
+              plotlyOutput('modelcomparisonplot')
           )
         )
       ),

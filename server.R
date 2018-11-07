@@ -6,12 +6,13 @@ shinyServer(function(input, output, session) {
   ######################################################################################  REACTIVES
   
   ######################################################################################  DATA STUFF
-
+  
   globaldata <- reactiveVal(NULL)
   unencodeddata <- reactiveVal(NULL)
-  #model <- reactiveVal(NULL)
+  models <- list(NULL)
+  countHowManyModels <- reactiveVal(1)
   filterlist <- reactiveVal(NULL)
-  
+
   getdataOriginal <- reactive({
     file <- input$datafile
     if (is.null(file)) {
@@ -161,8 +162,11 @@ shinyServer(function(input, output, session) {
       resample <- list('measures.test' = NULL)
     }
     
-    # train a final model on all data and return stuff
-    model = train(task = task, learner = learner)
+    # train a final model and add it to the modellist of trained models
+    model <- train(task = task, learner = learner)
+    models[[countHowManyModels()]] <- list('model' = mode, 'resample' = resample$measures.test)
+    countHowManyModels(countHowManyModels() + 1)
+    print(resample$measures.test)
     list('model' = model, 'learner' = learner, 'task' = task, 'resample' = resample$measures.test)
   })
   
@@ -262,6 +266,7 @@ shinyServer(function(input, output, session) {
   })
   
   observeEvent(input$ohe, {
+    validate(need(is.null(input$datafile) == F, 'Please select data.'))
     tmpdat <- globaldata() 
     unencodeddata(globaldata())
     colsWithManyFactors <- delete_colsWithManyFactors(tmpdat, input$maxfactorsOHE, onlyNames = T)
@@ -283,6 +288,15 @@ shinyServer(function(input, output, session) {
     globaldata(globaldata() %>% select(-one_of(featuresToDelete)))
   })
   
+  observeEvent(input$deletehighcorr, {
+    validate(need(is.null(input$datafile) == F, 'Please select data.'))
+    mat <- abs(get_cormat(globaldata()))
+    mat[lower.tri(mat, diag = T)] <- 0
+    whereHighCorrFeatures <- apply(mat, 1, function(row){any(row > input$thresholdfordeletehighcorr)})
+    whichColsDelete <- names(whereHighCorrFeatures[whereHighCorrFeatures])
+    globaldata(globaldata() %>% select(-one_of(whichColsDelete)))
+  })
+
   ######################################################################################  OUTPUTS
   ######################################################################################  OUTPUTS
   
@@ -369,15 +383,17 @@ shinyServer(function(input, output, session) {
   output$infoboxNAcolumns <- renderInfoBox({
     nas <- getnumbermissings()
     numberNas <- length(nas[nas > 0])
-    infoBox('Number of columns with NAs', numberNas, color = 'olive')
+    infoBox('Number of columns with NAs', numberNas, color = 'olive', width = 3)
   })
   
   output$selectNAcharactercolumns <- renderUI({
+    validate(need(length(getcharnas()) > 0, 'No character columns with missing data. '))
     selectInput('selectNAcharactercolumns', 'Select columns to remove NAs', 
                 choices = c('ALL COLUMNS', getcharnas()), multiple = T)
   })
   
   output$selectNAnumericcolumns <- renderUI({
+    validate(need(length(getnumnas()) > 0, 'No numeric columns with missing data. '))
     selectInput('selectNAnumericcolumns', 'Select columns to remove NAs', 
                 choices = c('ALL COLUMNS', getnumnas()), multiple = T)
   })
@@ -399,7 +415,7 @@ shinyServer(function(input, output, session) {
   })
   
   ######################################################################################  CORRELATIONS
-  
+ 
   output$correlationplot <- renderPlotly({
     validate(need(is.null(input$datafile) == F, 'Please select data.'))
     mat <- get_cormat(globaldata(), maxFactor = maxFactorsForCor, NAtoZero = T)
@@ -519,6 +535,14 @@ shinyServer(function(input, output, session) {
     learnmodel()$resample
   })
 
+  ######################################################################################  COMPARE MODELS 
+  
+  # output$modelcomparisonplot <- renderPlotly({
+  #   validate(need(length(models) > 0, 'No models trained yet.'))
+  #   
+  #   plot_ly(x = 1:length(models), y = )
+  # })
+  
   ######################################################################################  DOCUMENTATION
   
   output$inc <- renderUI({
