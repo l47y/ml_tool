@@ -52,10 +52,11 @@ algos_dict[['lm']] <- list(
   'parameter' = list()
 )
 algos_dict[['rpart']] <- list(
-  'parameter' = list('minsplit' = NULL, 'minbucket' = NULL, 'maxdepth' = NULL)
+  'parameter' = list('minsplit' = NULL, 'minbucket' = NULL, 'maxdepth' = NULL, cp = NULL)
 )
 algos_dict[['logreg']] <- list(
   'parameter' = list()
 )
+
 
 

@@ -100,7 +100,29 @@ shinyServer(function(input, output, session) {
   })
   
   getlearner <- reactive({
-    # create a list of parameters for the algorithm
+    
+    #check if all introduced parameters are in the correct format
+    paramSet <- getParamSet(getalgo())$pars
+    params <- names(algos_dict[[learningalgos_dict[[input$learnchoosealgo]]]]$parameter)
+    tryCorrectFormat <- list()
+    for (param in params) {
+      if (input[[param]] != '') {
+        print(paste0(param, ' wird gecheckt'))
+        typeRequired <- paramSet[[param]]$type
+        actualValue <- input[[param]]
+        conversion <- paste0("as.", typeRequired)
+        evalStr <- paste0(conversion, "(actualValue)")
+        tryCorrectFormat[param] <- try(eval(parse(text = evalStr)))
+      } else {
+        tryCorrectFormat[param] <- 'dummie'
+      }
+    }
+    couldNotBeConverted <- names(tryCorrectFormat[is.na(tryCorrectFormat)])
+    validate(need(!length(couldNotBeConverted) > 0,
+                 paste0('The following parameters are in the wrong formats: ',
+                        paste(couldNotBeConverted, collapse = ' '))))
+    
+    # create a list of parameters for the algorithm and construct learner
     params <- algos_dict[[learningalgos_dict[[input$learnchoosealgo]]]]$parameter
     if (is_empty(params) == F) {
       for (param in names(params)) {
@@ -116,11 +138,19 @@ shinyServer(function(input, output, session) {
   learnmodel <- eventReactive(input$learnmodel, {
     
     # check whether NAs exist and if they can be handled by the algorithm
-    nasPossible <- listLearners() %>% 
-      filter(short.name == learningalgos_dict[[input$learnchoosealgo]]) %>% 
-      pull(missings)
     if (mean(getnumbermissings()) != 0) {
+      nasPossible <- listLearners() %>% 
+        filter(short.name == learningalgos_dict[[input$learnchoosealgo]]) %>% pull(missings)
       validate(need(nasPossible == T, 'This algorithm cant handle NAs. Please remove them.'))
+    }
+    
+    # check whether multiclass can be handled by the algorithm if there are more than two classes
+    if (input$learnchoosetask == 'Classification') {
+      if (length(unique(globaldata() %>% pull(input$learnchoosetarget))) > 2) {
+        multiclassPossible <- listLearners() %>% 
+          filter(short.name == learningalgos_dict[[input$learnchoosealgo]]) %>% pull(multiclass)
+        validate(need(multiclassPossible == T, 'This algorithm cant handle multiclass problems.'))
+      }
     }
     
     # create a task 

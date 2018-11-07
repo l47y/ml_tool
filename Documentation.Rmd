@@ -9,11 +9,16 @@ output:
 
 ### Decision Tree
 Suitable for: Classification, Regression        
-This is a recursive partition of the whole set of samples represented by a tree structure. In each step of the recursion the following is done: The set of samples at the current node is divided into two subsamples such that a certain criteria is optimized. Basically each feature and within each feature each value (each combination of class values in case of a factor feature) is tried until the best split point is found. This is done until a stopping criteria is met or until the nodes are pure, which means: there is only one outcome class in case of classification or one outcome value in case of regression in the node. If the final nodes (the leafes) are not pure than the prediction would be the major class within the node in case of classification or the mean within the node in case of regression. Popular spliting criteria for classification are: Gini impurity and information gain while for regression the variance is used.
+This is a recursive partition of the whole set of samples represented by a tree structure. In each step of the recursion the following is done: The set of samples at the current node is divided into two subsamples such that a certain criteria is optimized. Basically each feature and within each feature each value (each combination of class values in case of a factor feature) is tried until the best split point is found. This is done until a stopping criteria is met or until the nodes are pure, which means: there is only one outcome class in case of classification or one outcome value in case of regression in the node. If the final nodes (the leafes) are not pure than the prediction would be the major class within the node in case of classification or the mean within the node in case of regression. Popular spliting criteria for classification are: Gini impurity and information gain while for regression the variance is used.    
+Parameters:    
+    + minsplit: Minimum number of samples that must exist in a node in order for a split to be attempted    
+    + minbucket: Minimum number of samples in any terminal leaf node.     
+    + maxdepth: Maximum depth of the tree. Higher maxdepth leads to better training fits but usually to lower        generelisation power.      
+    + cp: Complexity parameter: Only splits are done after which the overall lack of fit gets decreased by cp.       This can save computation power by avoiding unnecessary splits.     
 
 ### Linear Regression
 Suitable for: Regression   
-Every feature gets a corresponding weight. The final outcome of one sample is than calculated by: sum(Feature_i*weight_i). The weights are choosen such that sum[(prediction - target)^2] gets minimized. There are severel estimators of the weight vector. The most common one is the OLS (Ordinary least squares). Several assumptios are made about the data, for example homoscedasticity (same variance over all error terms) and the normal distribution of residuals. Weights could be interpreted as feature importance under the condition that all features are within the same range. 
+Every feature gets a corresponding weight. The final outcome of one sample is than calculated by: sum(Feature_i*weight_i). The weights are choosen such that sum[(prediction - target)^2 ] gets minimized. There are several estimators of the weight vector. The most common one is the OLS (Ordinary least squares). Several assumptios are made about the data, for example homoscedasticity (same variance over all error terms) and the normal distribution of residuals. Weights could be interpreted as feature importance under the condition that all features are within the same range. 
 
 ### Logistic Regression
 Suitable for: Classification    
@@ -22,14 +27,15 @@ Following term is modeled: P(outcome = 1 | sample = x) by 1/[1 + exp(-[intercept
 # Feature selection methods
 
 ### Anova Test  
-Suitable for: Classification
+Suitable for: Classification    
+With Anova the proportion of variance of the target explained by a feature can be calculated. Features which have a higher proportion of target-variance-explenation are more important.
 
 ### Correlation with target  
-Suitable for: Regression     
+Suitable for: Regression         
 Spearmans correlation between target and each feature is calculated. The higher this correlation the higher the feature importance. Both every feature and the target has to be numerical.
 
 ### Random Forest
-Suitable for: Classification, Regression
+Suitable for: Classification, Regression     
 First a random forest is fitted. Than while training a single tree the weighted impurity (or accuracy) decrease for every feature can be calculated. The problem is that they are biased towards features with a lot of factors. Furthermore when having two highly correlated feautures, one of them will get a significantly lower feature importance although both of them have more or less the same explanation power of the target. This problem can be highly reduced when fitting a whole forest instead of a single tree, where in each tree only a certain number of random choosen features are selected. The final importance of a certain feature can be calculated as the mean of all single importances in each tree. 
 
 
