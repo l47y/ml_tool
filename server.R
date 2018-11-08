@@ -2,38 +2,31 @@
 
 shinyServer(function(input, output, session) {
   
-  ######################################################################################  REACTIVES
-  ######################################################################################  REACTIVES
+  ######################################################################################  ~ REACTIVE SECTION ~
+  ######################################################################################  --------------------
+  ######################################################################################
   
   ######################################################################################  DATA STUFF
   
-  globaldata <- reactiveVal(NULL)
-  trainingdata <- reactiveVal(NULL)
-  testingdata <- reactiveVal(NULL)
-  unencodeddata <- reactiveVal(NULL)
-  models <- reactiveVal(list())
-  countHowManyModels <- reactiveVal(1)
-  filterlist <- reactiveVal(NULL)
+  globaldata <- reactiveVal(NULL)                 # the whole working data table 
+  trainingdata <- reactiveVal(NULL)               # the training data (subset of globaldata)
+  testingdata <- reactiveVal(NULL)                # the testing data (subset of globaldata)
+  unencodeddata <- reactiveVal(NULL)              # snapshot of data before OHE is done such that a reset is possible
+  unimputeddata <- reactiveVal(NULL)              # snapshot of data before imputing is done such that a reset is possible
+  models <- reactiveVal(list())                   # list of all trained models 
+  filterlist <- reactiveVal(NULL)                 # list which memorizes all columns where a filter has been set
 
   getdataOriginal <- reactive({
     file <- input$datafile
     if (is.null(file)) {
       return(NULL) 
     }
-    read_csv(file$datapath) %>% make_conformColnames()
-  })
-  
-  getdata <- reactive({
-    file <- input$datafile
-    if (is.null(file)) {
-      return(NULL) 
-    }
-    dat <- read_csv(file$datapath) %>% make_conformColnames()
+    dat <- read_csv(file$datapath, col_types = cols()) %>% make_conformColnames()
     globaldata(dat)
     filterlist(setNames(as.list(rep(F, ncol(dat))), colnames(dat)))
     dat
   })
-  
+
   ######################################################################################  MISSING DATA STUFF
   
   getnumbermissings <- reactive({
@@ -62,12 +55,7 @@ shinyServer(function(input, output, session) {
   ######################################################################################  MODEL STUFF
   
   prepareDataForLearn <- eventReactive(c(input$learnmodel, input$calcfeatureimp), ignoreInit = T, {
-    tmpdat <- globaldata() %>% make_strToFactors() 
-    dummiealgos <- paste0(gettaskPrefix(),  c('lm'))
-    if (getalgo() %in% dummiealgos) {
-      tmpdat %<>% createDummyFeatures()
-    }
-    tmpdat
+    globaldata() %>% make_strToFactors() 
   })
   
   gettaskPrefix <- reactive({
@@ -81,6 +69,8 @@ shinyServer(function(input, output, session) {
   })
   
   gettask <- reactive({
+    
+    # split data into train and test set 
     trainTestSplit <- round((1 - input$percentageoftestingdata) * nrow(prepareDataForLearn()))
     dataForTraining <- prepareDataForLearn()[1:trainTestSplit, ]
     dataForTesting <- prepareDataForLearn()[(trainTestSplit + 1):nrow(prepareDataForLearn()), ]
@@ -91,10 +81,12 @@ shinyServer(function(input, output, session) {
     }
     trainingdata(dataForTraining)
     testingdata(dataForTesting)
+    
+    #create tase
     if (input$learnchoosetask == 'Regression') {
-      task = makeRegrTask('task', data = trainingdata(), target = input$learnchoosetarget)
+      task = makeRegrTask('task', data = as.data.frame(trainingdata()), target = input$learnchoosetarget)
     } else if (input$learnchoosetask == 'Classification') {
-      task = makeClassifTask('task', data = trainingdata(), target = input$learnchoosetarget)
+      task = makeClassifTask('task', data = as.data.frame(trainingdata()), target = input$learnchoosetarget)
     }
     task
   })
@@ -136,9 +128,12 @@ shinyServer(function(input, output, session) {
   
   learnmodel <- eventReactive(input$learnmodel, {
     
+    # get table from mlr with properties of learner
+    learnerTable <- suppressWarnings(listLearners())
+    
     # check whether NAs exist and if they can be handled by the algorithm
     if (mean(getnumbermissings()) != 0) {
-      nasPossible <- listLearners() %>% 
+      nasPossible <- learnerTable %>% 
         filter(short.name == learningalgos_dict[[input$learnchoosealgo]]) %>% pull(missings)
       validate(need(nasPossible == T, 'This algorithm cant handle NAs. Please remove them.'))
     }
@@ -146,10 +141,18 @@ shinyServer(function(input, output, session) {
     # check whether multiclass can be handled by the algorithm if there are more than two classes
     if (input$learnchoosetask == 'Classification') {
       if (length(unique(globaldata() %>% pull(input$learnchoosetarget))) > 2) {
-        multiclassPossible <- listLearners() %>% 
+        multiclassPossible <- learnerTable %>% 
           filter(short.name == learningalgos_dict[[input$learnchoosealgo]]) %>% pull(multiclass)
         validate(need(multiclassPossible == T, 'This algorithm cant handle multiclass problems.'))
       }
+    }
+    
+    # check whether factors can be handled by the algorithm
+    charfactorCols <- get_colsoftype(globaldata(), c('character', 'factor'))
+    if (length(charfactorCols) > 0) {
+      factorsPossible <- learnerTable %>% 
+        filter(short.name == learningalgos_dict[[input$learnchoosealgo]]) %>% pull(factors)
+      validate(need(factorsPossible == T, 'This algorithm cant handle factors. Please encode the data.'))
     }
     
     # create a task 
@@ -167,7 +170,7 @@ shinyServer(function(input, output, session) {
     
     # train models if the validation strategy is not None
     if (input$choosevalidationstrat != 'None') {
-      resample <- resample(learner, task, desc, 
+      resample <- resample(learner, task, desc, show.info = F,
                            measures = lapply(list(input$performancemeasures), 
                                              function(str){eval(parse(text = str))}))
     } else {
@@ -181,9 +184,9 @@ shinyServer(function(input, output, session) {
       params[[param]] <- input[[param]]
     }
     
-    # train a final model and add it to the modellist of trained models
+    # train a final model and add it to the modellist of trained models and return stuff
     model <- train(task = task, learner = learner)
-    preds <- predict(model, newdata = testingdata())
+    preds <- predict(model, newdata = as.data.frame(testingdata()))
     newModels <- models()
     newModels[[length(models()) + 1]] <- list('model' = model, 'resample' = resample$measures.test,
                                               'parameters' = params, 'predictions' = preds,
@@ -192,8 +195,11 @@ shinyServer(function(input, output, session) {
     list('model' = model, 'learner' = learner, 'task' = task, 'resample' = resample$measures.test)
   })
   
-  ######################################################################################  OBSERVE
-  ######################################################################################  OBSERVE
+  ######################################################################################  ~ OBSERVE SECTION ~
+  ######################################################################################  --------------------
+  ######################################################################################
+  
+  ######################################################################################  SELECT AND FILTER STUFF
   
   observeEvent(input$applydelete, {
     data <- globaldata()
@@ -227,8 +233,14 @@ shinyServer(function(input, output, session) {
     globaldata(data)
   })
   
-  observeEvent(input$imputeNAchar, {
-    
+  observeEvent(input$resetall, {
+    globaldata(getdataOriginal())
+  })
+  
+  ######################################################################################  CLEAN DATA STUFF
+  
+  observeEvent(input$imputeNA, {
+    unimputeddata(globaldata())
     if (is.null(input$selectNAcharactercolumns) == F) {
       charnas <- getcharnas()
       if (input$selectNAcharactercolumns == 'ALL COLUMNS') {
@@ -242,9 +254,6 @@ shinyServer(function(input, output, session) {
       updateSelectInput(session, inputId = 'selectNAcharactercolumns',
                         choices = setdiff(charnas, colsToUse))
     }
-  })
-  
-  observeEvent(input$imputeNAnum, {
     
     if (is.null(input$selectNAnumericcolumns) == F) {
       numnas <- getnumnas()
@@ -259,32 +268,20 @@ shinyServer(function(input, output, session) {
       tmpdat <- globaldata() %>% impute_at(.na = eval(parse(text = naAction)), .vars = colsToUse)
       globaldata(tmpdat)
       updateSelectInput(session, inputId = 'selectNAnumericcolumns',
-                     choices = setdiff(numnas, colsToUse))
+                        choices = setdiff(numnas, colsToUse))
     }
+
   })
   
   observeEvent(input$resetNaTreats, {
-    globaldata(getdata())
+    globaldata(unimputeddata())
   })
   
-  observeEvent(input$resetall, {
-    
-    updateSelectInput(session, inputId = 'whichcolumnsdelete', selected = NULL, choices = colnames(getdataOriginal()))
-
-    numcols <- get_colsoftype(getdataOriginal(), c('numeric', 'integer'))
-    charcols <- get_colsoftype(getdataOriginal(), 'character')
-
-    lapply(numcols, function(col) {
-      colrange <- range(getdataOriginal() %>% pull(col), na.rm = T)
-      updateSliderInput(session, inputId = col, value = c(colrange[1], colrange[2]))
-    })
-
-    lapply(charcols, function(col) {
-      updateSelectInput(session, inputId = col, selected = NULL, choices = unique(getdataOriginal() %>% pull(col)))
-    })
-    filterlist(setNames(as.list(rep(F, ncol(getdataOriginal()))), colnames(getdataOriginal())))
-    globaldata(getdataOriginal())
+  observeEvent(input$removeconstantfeatures, {
+    globaldata(globaldata() %>% removeConstantFeatures())
   })
+  
+  ######################################################################################  CORRELATION AND OHE STUFF
   
   observeEvent(input$ohe, {
     validate(need(is.null(input$datafile) == F, 'Please select data.'))
@@ -304,11 +301,6 @@ shinyServer(function(input, output, session) {
     globaldata(unencodeddata())
   })
   
-  observeEvent(input$deletefeaturesbythresh, {
-    featuresToDelete <- get_leastImportanceFeatures(getfeatimptable(), input$featureselectthreshold)
-    globaldata(globaldata() %>% select(-one_of(featuresToDelete)))
-  })
-  
   observeEvent(input$deletehighcorr, {
     validate(need(is.null(input$datafile) == F, 'Please select data.'))
     mat <- abs(get_cormat(globaldata()))
@@ -318,13 +310,17 @@ shinyServer(function(input, output, session) {
     whichColsDelete <- setdiff(whichColsDelete, input$learnchoosetarget)
     globaldata(globaldata() %>% select(-one_of(whichColsDelete)))
   })
-
-  observeEvent(input$removeconstantfeatures, {
-    globaldata(globaldata() %>% removeConstantFeatures())
+  
+  ######################################################################################  FEATURE IMPORTANCE STUFF
+  
+  observeEvent(input$deletefeaturesbythresh, {
+    featuresToDelete <- get_leastImportanceFeatures(getfeatimptable(), input$featureselectthreshold)
+    globaldata(globaldata() %>% select(-one_of(featuresToDelete)))
   })
   
-  ######################################################################################  OUTPUTS
-  ######################################################################################  OUTPUTS
+  ######################################################################################  ~ OUTPUT SECTION ~ 
+  ######################################################################################  -------------------
+  ######################################################################################
   
   ######################################################################################  SELECT AND FILTER
   
@@ -350,7 +346,7 @@ shinyServer(function(input, output, session) {
   })
   
   output$initGlobaldata <- renderText({
-    getdata()
+    getdataOriginal()
     print('')
   })
   
@@ -424,23 +420,7 @@ shinyServer(function(input, output, session) {
                 choices = c('ALL COLUMNS', getnumnas()), multiple = T)
   })
   
-  ######################################################################################  DETAILED ANALYSIS
-  
-  output$selectColumn1plot1 <- renderUI({
-    selectInput('selectColumn1plot1', 'Select 1st column', choices = colnames(globaldata()), 
-                selected = NULL, width = NULL )
-  })
-  
-  output$selectColumn2plot1 <- renderUI({
-    selectInput('selectColumn2plot2', 'Select 2nd column', choices = colnames(globaldata()), 
-                selected = NULL, width = NULL)
-  })
-  
-  output$plotidea2 <- renderPlotly({
-
-  })
-  
-  ######################################################################################  CORRELATIONS
+  ######################################################################################  CORRELATIONS AND OHE
  
   output$correlationplot <- renderPlotly({
     validate(need(is.null(input$datafile) == F, 'Please select data.'))
@@ -478,13 +458,13 @@ shinyServer(function(input, output, session) {
   
   output$selectcolumnfortextcloud <- renderUI({
     selectInput('selectcolumnfortextcloud', 'Select column for wordcloud',
-                choices = get_colsoftype(globaldata(), 'character'),
+                choices = get_colsoftype(globaldata(), c('character', 'factor')),
                 selected = NULL, width = 250)
   })
   
   output$textcloud <- renderWordcloud2({
     validate(need(is.null(input$datafile) == F, 'Please select data.'))
-    validate(need(length(get_colsoftype(globaldata(), 'character')) > 0, 
+    validate(need(length(get_colsoftype(globaldata(), c('character', 'factor'))) > 0, 
                   'No character columns in data.'))
     wordtab <- get_wordfreq(globaldata() %>% pull(input$selectcolumnfortextcloud))
     wordcloud2(wordtab, backgroundColor = 'grey48', size = input$textcloudsize, color = "random-light")
@@ -518,7 +498,6 @@ shinyServer(function(input, output, session) {
   })
   
   output$parameterforvalidationstrat <- renderUI({
-    
     if (input$choosevalidationstrat != 'None') {
       if (input$choosevalidationstrat == 'Holdout') {
         sliderInput('parameterforvalidationstrat', 'Choose Percentage of training data', 
@@ -545,9 +524,9 @@ shinyServer(function(input, output, session) {
   output$plotperformanceoverview <- renderPlotly({
     validate(need(is.null(input$datafile) == F, 'Please select data.'))
     if (input$showtrainortestperformance == 'Performance on training data') {
-      preds <- predict(learnmodel()$model, newdata = trainingdata()) 
+      preds <- predict(learnmodel()$model, newdata = as.data.frame(trainingdata()))
     } else {
-      preds <- predict(learnmodel()$model, newdata = testingdata()) 
+      preds <- predict(learnmodel()$model, newdata = as.data.frame(testingdata()))
     }
     if (input$learnchoosetask == 'Regression') {
       p <- plot_ly(x = preds$data$truth, y = preds$data$response, type = 'scatter', mode = 'markers',
@@ -567,19 +546,6 @@ shinyServer(function(input, output, session) {
   })
 
   ######################################################################################  COMPARE MODELS 
-  
-  output$modelcomparisonplot <- renderPlotly({
-    validate(need(length(models()) > 0, 'No models trained yet.'))
-    performanceOfModels <- rep(0, length(models())) 
-    for (i in 1:length(models())) {
-      preds <- models()[[i]]$predictions
-      performanceOfModels[i] <- performance(preds, measures = lapply(list(input$performancemeasures), 
-                                                                     function(str){eval(parse(text = str))}))
-    }
-    plot_ly(x = 1:length(models()), y = performanceOfModels, type = 'bar', color = 'pink') %>% 
-      add_plotlayout() %>% layout(title = 'Comparison of trained models', xaxis = list(title = 'Model'), 
-                                  yaxis = list(title = paste0(input$performancemeasures, ' on test data')))
-  })
   
   output$selectmodelfordescription <- renderUI({
     if (length(models()) > 0) {
@@ -603,14 +569,21 @@ shinyServer(function(input, output, session) {
     }
   })
   
-  ######################################################################################  DOCUMENTATION
-  
-  output$inc <- renderUI({
-    getPage('Documentation.html')
+  output$modelcomparisonplot <- renderPlotly({
+    validate(need(length(models()) > 0, 'No models trained yet.'))
+    performanceOfModels <- rep(0, length(models())) 
+    for (i in 1:length(models())) {
+      preds <- models()[[i]]$predictions
+      performanceOfModels[i] <- performance(preds, measures = lapply(list(input$performancemeasures), 
+                                                                     function(str){eval(parse(text = str))}))
+    }
+    plot_ly(x = 1:length(models()), y = performanceOfModels, type = 'bar', color = 'pink') %>% 
+      add_plotlayout() %>% layout(title = 'Comparison of trained models', xaxis = list(title = 'Model'), 
+                                  yaxis = list(title = paste0(input$performancemeasures, ' on test data')))
   })
-
-  ###################################################################################### THE END.
-  ###################################################################################### THE END.
+  
+  ###################################################################################### ~ THE END. ~ 
+  ###################################################################################### --------------
   
 })
 

@@ -29,7 +29,6 @@ ui <- dashboardPage(
     tabItems(
       
       ######################################################################################  
-      ###################################################################################### 
       
       tabItem(
         tabName = 'SelectandFilterData',
@@ -65,7 +64,6 @@ ui <- dashboardPage(
       ),
       
       ######################################################################################  
-      ###################################################################################### 
       
       tabItem(
         tabName = 'ShowData', 
@@ -75,7 +73,6 @@ ui <- dashboardPage(
       ),
       
       ######################################################################################  
-      ###################################################################################### 
       
       tabItem(
         tabName = 'Overview',
@@ -98,7 +95,6 @@ ui <- dashboardPage(
       ),
       
       ######################################################################################  
-      ###################################################################################### 
       
       tabItem(
         tabName = 'Cleandata',
@@ -108,16 +104,15 @@ ui <- dashboardPage(
             box(title = 'Remove missings in character columns', solidHeader = T, width = 4, collapsible = T,
                 uiOutput('selectNAcharactercolumns'),
                 selectInput('strategyNAchar', 'Select strategy to treat NAs', 
-                            choices = c('Most frequent')),
-                actionButton('imputeNAchar', 'Impute NAs')
+                            choices = c('Most frequent'))
             ),
             box(title = 'Remove missings in numeric columns', solidHeader = T, width = 4, collapsible = T,
                 uiOutput('selectNAnumericcolumns'),
                 selectInput('strategyNAnum', 'Select strategy to treat NAs', 
-                            choices = c('Median', 'Mean', 'Set to zero')),
-                actionButton('imputeNAnum', 'Impute NAs')
+                            choices = c('Median', 'Mean', 'Set to zero'))
             ),
-            box(title = 'Reset', solidHeader = T, width = 2, collapsible = T,
+            box(title = 'Impute and Reset', solidHeader = T, width = 3, collapsible = T,
+                actionButton('imputeNA', 'Impute NAs'),
                 actionButton('resetNaTreats', 'Reset Imputing')
             ),
             column(12, 
@@ -130,7 +125,6 @@ ui <- dashboardPage(
       ),
 
       ######################################################################################  
-      ###################################################################################### 
       
       tabItem(
         tabName = 'Correlations',
@@ -156,7 +150,6 @@ ui <- dashboardPage(
       ),
       
       ######################################################################################  
-      ###################################################################################### 
       
       tabItem(
         tabName = 'Textanalysis',
@@ -172,7 +165,6 @@ ui <- dashboardPage(
       ),
       
       ######################################################################################  
-      ######################################################################################
       
       tabItem(
         tabName = 'Featureselection',
@@ -190,7 +182,6 @@ ui <- dashboardPage(
         )
       ),
       
-      ######################################################################################  
       ######################################################################################  
       
       tabItem(
@@ -230,7 +221,6 @@ ui <- dashboardPage(
       ),
       
       ######################################################################################  
-      ###################################################################################### 
       
       tabItem(
         tabName = 'CompareModels', 
@@ -246,13 +236,10 @@ ui <- dashboardPage(
       ),
       
       ######################################################################################  
-      ###################################################################################### 
         
       tabItem(
         tabName = 'Documentation',
-        #htmlOutput("inc")
         includeMarkdown('Documentation.Rmd')
-        #includeHTML('Documentation.html')
       )
       
     ) 
