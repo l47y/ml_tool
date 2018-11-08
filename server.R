@@ -13,6 +13,7 @@ shinyServer(function(input, output, session) {
   testingdata <- reactiveVal(NULL)                # the testing data (subset of globaldata)
   unencodeddata <- reactiveVal(NULL)              # snapshot of data before OHE is done such that a reset is possible
   unimputeddata <- reactiveVal(NULL)              # snapshot of data before imputing is done such that a reset is possible
+  unnormalizeddata <- reactiveVal(NULL)           # snapshot of data before normalizing is done such that a reset is possible
   models <- reactiveVal(list())                   # list of all trained models 
   filterlist <- reactiveVal(NULL)                 # list which memorizes all columns where a filter has been set
 
@@ -281,6 +282,22 @@ shinyServer(function(input, output, session) {
     globaldata(globaldata() %>% removeConstantFeatures())
   })
   
+  observeEvent(input$normalizefeatures, {
+    unnormalizeddata(globaldata())
+    if (input$selectcolsfornormalize == 'ALL COLUMNS') {
+      colsToUse <- setdiff(get_colsoftype(globaldata(), c('integer', 'numeric')), input$learnchoosetarget)
+    } else {
+      colsToUse <- input$selectcolsfornormalize
+    }
+    normData <- normalizeFeatures(globaldata(), target = input$learnchoosetarget, 
+                                  method = normalizing_dict[[input$selectmethodfornormalize]],
+                                  cols = colsToUse)
+    globaldata(normData)
+  })
+  
+  observeEvent(input$resetnormalizing, {
+    globaldata(unnormalizeddata())
+  })
   ######################################################################################  CORRELATION AND OHE STUFF
   
   observeEvent(input$ohe, {
@@ -418,6 +435,14 @@ shinyServer(function(input, output, session) {
     validate(need(length(getnumnas()) > 0, 'No numeric columns with missing data. '))
     selectInput('selectNAnumericcolumns', 'Select columns to remove NAs', 
                 choices = c('ALL COLUMNS', getnumnas()), multiple = T)
+  })
+  
+  output$selectcolsfornormalize <- renderUI({
+    validate(need(is.null(input$datafile) == F, 'Please select data.'))
+    validate(need(nchar(input$learnchoosetarget) > 0, 'Please select a target column first.'))
+    numCols <- setdiff(get_colsoftype(globaldata(), c('integer', 'numeric')), input$learnchoosetarget)
+    selectInput('selectcolsfornormalize', 'Select Columns to normalize', multiple = T, 
+                choices = c('ALL COLUMNS', numCols))
   })
   
   ######################################################################################  CORRELATIONS AND OHE

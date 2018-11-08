@@ -45,6 +45,13 @@ regclassif_dict <- dict()
 regclassif_dict[['Regression']] <- 'regr'
 regclassif_dict[['Classification']] <- 'classif'
 
+normalizing_dict <- dict()
+normalizing_dict[['Map to 0-1 interval']] <- 'range'
+normalizing_dict[['Standardize']] <- 'standardize'
+normalizing_dict[['Center']] <- 'center'
+normalizing_dict[['Scale']] <- 'scale'
+
+
 ######################################################################################  ALGORITHMS
 
 algos_dict <- dict()

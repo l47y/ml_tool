@@ -118,6 +118,13 @@ ui <- dashboardPage(
             column(12, 
               box(title = 'Remove constant features', solidHeader = T, width = 3, collapsible = T,
                   actionButton('removeconstantfeatures', 'Remove constant features')
+              ),
+              box(title = 'Normalize Features', collapsed = T, width = 3, solidHeader = T, 
+                  uiOutput('selectcolsfornormalize'), 
+                  selectInput('selectmethodfornormalize', 'Select method', 
+                              choices = unlist(normalizing_dict$keys())),
+                  actionButton('normalizefeatures', 'Normalize Features'), 
+                  actionButton('resetnormalizing', 'Reset Normalizing')
               )
             )
           )
