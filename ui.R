@@ -1,4 +1,4 @@
-
+source('config.R')
 ui <- dashboardPage(
   
   dashboardHeader(
@@ -108,7 +108,7 @@ ui <- dashboardPage(
             box(title = 'Remove missings in character columns', solidHeader = T, width = 4, collapsible = T,
                 uiOutput('selectNAcharactercolumns'),
                 selectInput('strategyNAchar', 'Select strategy to treat NAs', 
-                            choices = c('Most frequent', 'According to distribution')),
+                            choices = c('Most frequent')),
                 actionButton('imputeNAchar', 'Impute NAs')
             ),
             box(title = 'Remove missings in numeric columns', solidHeader = T, width = 4, collapsible = T,
@@ -235,10 +235,11 @@ ui <- dashboardPage(
       tabItem(
         tabName = 'CompareModels', 
         fluidPage(
-          box('Model description', collapsible = T, width = 5, solidHeader = T,
-              tableOutput('modeldescriptiontable')
+          box(title = 'Model description', collapsible = T, width = 5, solidHeader = T,
+              uiOutput('selectmodelfordescription'),
+              htmlOutput('modeldescription')
           ),
-          box('Model comparison', collapsible = T, width = 7, solidHeader = T,
+          box(title = 'Model comparison', collapsible = T, width = 7, solidHeader = T,
               plotlyOutput('modelcomparisonplot')
           )
         )

@@ -1,4 +1,4 @@
-source('config.R')
+#source('config.R')
 
 shinyServer(function(input, output, session) {
   
@@ -11,7 +11,7 @@ shinyServer(function(input, output, session) {
   trainingdata <- reactiveVal(NULL)
   testingdata <- reactiveVal(NULL)
   unencodeddata <- reactiveVal(NULL)
-  models <- reactiveVal(NULL)
+  models <- reactiveVal(list())
   countHowManyModels <- reactiveVal(1)
   filterlist <- reactiveVal(NULL)
 
@@ -81,9 +81,14 @@ shinyServer(function(input, output, session) {
   })
   
   gettask <- reactive({
-    trainTestSplit <- round(input$percentageoftestingdata * nrow(prepareDataForLearn()))
+    trainTestSplit <- round((1 - input$percentageoftestingdata) * nrow(prepareDataForLearn()))
     dataForTraining <- prepareDataForLearn()[1:trainTestSplit, ]
     dataForTesting <- prepareDataForLearn()[(trainTestSplit + 1):nrow(prepareDataForLearn()), ]
+    if (input$learnchoosetask == 'Classification') {
+      validate(need(
+        length(unique(dataForTraining %>% pull(input$learnchoosetarget))) > 1, 
+        'There is only one class in the training data set.'))
+    }
     trainingdata(dataForTraining)
     testingdata(dataForTesting)
     if (input$learnchoosetask == 'Regression') {
@@ -169,14 +174,21 @@ shinyServer(function(input, output, session) {
       resample <- list('measures.test' = NULL)
     }
     
+    # save the list of actual parameters 
+    paramNames <- names(algos_dict[[learningalgos_dict[[input$learnchoosealgo]]]]$parameter)
+    params <- setNames(as.list(rep(0, length(paramNames))), paramNames)
+    for (param in names(params)) {
+      params[[param]] <- input[[param]]
+    }
+    
     # train a final model and add it to the modellist of trained models
     model <- train(task = task, learner = learner)
+    preds <- predict(model, newdata = testingdata())
     newModels <- models()
-    newModels[[countHowManyModels()]] <- list('model' = model, 'resample' = resample$measures.test)
+    newModels[[length(models()) + 1]] <- list('model' = model, 'resample' = resample$measures.test,
+                                              'parameters' = params, 'predictions' = preds,
+                                              'algorithm' = input$learnchoosealgo)
     models(newModels)
-    countHowManyModels(countHowManyModels() + 1)
-    print(countHowManyModels())
-    print(length(models()))
     list('model' = model, 'learner' = learner, 'task' = task, 'resample' = resample$measures.test)
   })
   
@@ -542,7 +554,7 @@ shinyServer(function(input, output, session) {
               color = 'pink')
     } else if(input$learnchoosetask == 'Classification') {
       preds <- preds$data %>% group_by(response, truth) %>% summarize(n = n())
-      p <- plot_ly(x = preds$response, y = preds$truth, z = preds$n, type = 'heatmap') 
+      p <- plot_ly(x = preds$response, y = preds$truth, z = preds$n, type = 'heatmap', colors = 'PiYG') 
     }
     p %<>% add_plotlayout() %>% layout(xaxis = list(title = 'Target'), yaxis = list(title = 'Prediction'),
                                        title = 'Predictive performance')
@@ -560,13 +572,35 @@ shinyServer(function(input, output, session) {
     validate(need(length(models()) > 0, 'No models trained yet.'))
     performanceOfModels <- rep(0, length(models())) 
     for (i in 1:length(models())) {
-      preds <- predict(models()[[i]]$model, newdata = testingdata()) 
+      preds <- models()[[i]]$predictions
       performanceOfModels[i] <- performance(preds, measures = lapply(list(input$performancemeasures), 
                                                                      function(str){eval(parse(text = str))}))
     }
     plot_ly(x = 1:length(models()), y = performanceOfModels, type = 'bar', color = 'pink') %>% 
       add_plotlayout() %>% layout(title = 'Comparison of trained models', xaxis = list(title = 'Model'), 
-                                  yaxis = list(title = paste0(input$performancemeasures), ' on test data'))
+                                  yaxis = list(title = paste0(input$performancemeasures, ' on test data')))
+  })
+  
+  output$selectmodelfordescription <- renderUI({
+    if (length(models()) > 0) {
+      selectInput('selectmodelfordescription', 'Select model', 
+                  choices = as.character(1:length(models())), selected = '1')
+    }
+  })
+  
+  output$modeldescription <- renderText({
+    if (length(models()) > 0) {
+      selectedModel <- models()[[as.numeric(input$selectmodelfordescription)]]
+      parameters <- selectedModel$parameters
+      printStr <- paste0('Algorithm: ', selectedModel$algorithm, '<br>
+                         ---------------------<br>Parameters:')
+      for (param in names(parameters)) {
+        printStr <- paste0(printStr, '<br>', param, ': ', parameters[[param]])
+      }
+      printStr <- paste0(printStr, '<br>---------------------<br>Features:<br>', 
+                         paste(selectedModel$model$features, collapse = ', '))
+      HTML(printStr)
+    }
   })
   
   ######################################################################################  DOCUMENTATION
