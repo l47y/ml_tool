@@ -65,7 +65,7 @@ getPage<-function(name) {
 
 get_leastImportanceFeatures <- function(featimptable, number) {
   if (number >= nrow(featimptable)) {
-    stop('You cant delete more features than are existing in the original data.')
+    warning('You cant delete more features than are existing in the original data.')
   } 
   featimptable %<>% arrange_(names(featimptable)[3])
   return (featimptable$name[1:number])

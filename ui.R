@@ -25,6 +25,7 @@ ui <- dashboardPage(
     shinyDashboardThemes(
       #theme = "grey_dark"
       theme = 'purple_gradient'
+      #theme = 'boe_website'
     ),
     tabItems(
       
@@ -34,12 +35,10 @@ ui <- dashboardPage(
         tabName = 'SelectandFilterData',
         fluidPage(
           box(title = 'Select file', collapsible = T, width = 3, solidHeader = T,
-              fileInput('datafile', 
-                        'Choose Data',
-                        multiple = FALSE,
-                        accept = c('text/csv',
-                                   'text/comma-separated-values,text/plain',
-                                   '.csv'))
+              selectInput('sourceoffile', 'Where to get data from?', 
+                          choices = c('Upload data from computer', 'Choose example data')),
+              uiOutput('datafile'),
+              uiOutput('importexampledata')
           ),
           box(title = 'Delete columns', collapsible = T, width = 3, solidHeader = T,
               uiOutput('whichcolumnsdelete'),
@@ -232,12 +231,15 @@ ui <- dashboardPage(
       tabItem(
         tabName = 'CompareModels', 
         fluidPage(
-          box(title = 'Model description', collapsible = T, width = 5, solidHeader = T,
+          box(title = 'Model description', collapsible = T, width = 4, solidHeader = T,
               uiOutput('selectmodelfordescription'),
               htmlOutput('modeldescription')
           ),
-          box(title = 'Model comparison', collapsible = T, width = 7, solidHeader = T,
+          box(title = 'Model comparison', collapsible = T, width = 6, solidHeader = T,
               plotlyOutput('modelcomparisonplot')
+          ),
+          box(title = 'Delete models', collapsible = T, width = 2, solidHeader = T,
+              actionButton('deletemodels', 'Delete')
           )
         )
       ),

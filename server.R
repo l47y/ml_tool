@@ -18,14 +18,18 @@ shinyServer(function(input, output, session) {
   filterlist <- reactiveVal(NULL)                 # list which memorizes all columns where a filter has been set
 
   getdataOriginal <- reactive({
-    file <- input$datafile
-    if (is.null(file)) {
-      return(NULL) 
-    }
-    dat <- read_csv(file$datapath, col_types = cols()) %>% make_conformColnames()
-    globaldata(dat)
-    filterlist(setNames(as.list(rep(F, ncol(dat))), colnames(dat)))
-    dat
+      if (input$sourceoffile == 'Upload data from computer') {
+        file <- input$datafile
+        if (is.null(file)) {
+          return(NULL) 
+        }
+        dat <- read_csv(file$datapath, col_types = cols()) %>% make_conformColnames()
+      } else if (input$sourceoffile == 'Choose example data') {
+        dat <- eval(parse(text = tolower(input$datafile)))
+      }
+      globaldata(dat)
+      filterlist(setNames(as.list(rep(F, ncol(dat))), colnames(dat)))
+      dat
   })
 
   ######################################################################################  MISSING DATA STUFF
@@ -49,15 +53,12 @@ shinyServer(function(input, output, session) {
   ######################################################################################  FEATURE SELECTION STUFF
   
   getfeatimptable <- eventReactive(input$calcfeatureimp, {
+    globaldata() %>% make_strToFactors() 
     generateFilterValuesData(task = gettask(), learner = getlearner(), 
                              method = featimp_dict[[input$featureselectmethod]]$name)$data
   })
   
   ######################################################################################  MODEL STUFF
-  
-  prepareDataForLearn <- eventReactive(c(input$learnmodel, input$calcfeatureimp), ignoreInit = T, {
-    globaldata() %>% make_strToFactors() 
-  })
   
   gettaskPrefix <- reactive({
     case_when(input$learnchoosetask == 'Regression' ~ 'regr.',
@@ -72,18 +73,20 @@ shinyServer(function(input, output, session) {
   gettask <- reactive({
     
     # split data into train and test set 
-    trainTestSplit <- round((1 - input$percentageoftestingdata) * nrow(prepareDataForLearn()))
-    dataForTraining <- prepareDataForLearn()[1:trainTestSplit, ]
-    dataForTesting <- prepareDataForLearn()[(trainTestSplit + 1):nrow(prepareDataForLearn()), ]
+    dat <- globaldata() %>% make_strToFactors() 
+    trainTestSplit <- round((1 - input$percentageoftestingdata) * nrow(dat))
+    dataForTraining <- dat[1:trainTestSplit, ]
+    dataForTesting <- dat[(trainTestSplit + 1):nrow(dat), ]
     if (input$learnchoosetask == 'Classification') {
       validate(need(
         length(unique(dataForTraining %>% pull(input$learnchoosetarget))) > 1, 
         'There is only one class in the training data set.'))
     }
+
     trainingdata(dataForTraining)
     testingdata(dataForTesting)
     
-    #create tase
+    #create task
     if (input$learnchoosetask == 'Regression') {
       task = makeRegrTask('task', data = as.data.frame(trainingdata()), target = input$learnchoosetarget)
     } else if (input$learnchoosetask == 'Classification') {
@@ -112,7 +115,7 @@ shinyServer(function(input, output, session) {
     couldNotBeConverted <- names(tryCorrectFormat[is.na(tryCorrectFormat)])
     validate(need(!length(couldNotBeConverted) > 0,
                  paste0('The following parameters are in the wrong format: ',
-                        paste(couldNotBeConverted, collapse = ' '))))
+                        paste(couldNotBeConverted, collapse = ', '))))
     
     # create a list of parameters for the algorithm and construct learner
     params <- algos_dict[[learningalgos_dict[[input$learnchoosealgo]]]]$parameter
@@ -129,8 +132,21 @@ shinyServer(function(input, output, session) {
   
   learnmodel <- eventReactive(input$learnmodel, {
     
+    # shuffle data before first learning in order to avoid having ordered classes in data
+    if (length(models()) < 1) {
+      print('wird geshufflet')
+      globaldata(globaldata()[sample(nrow(globaldata())),])
+    }
+    
     # get table from mlr with properties of learner
     learnerTable <- suppressWarnings(listLearners())
+    
+    # check if there are columns with too many factors
+    colsWithTooMany <- delete_colsWithManyFactors(globaldata(), maxFactor = 30, onlyNames = T)
+    validate(need(length(colsWithTooMany) < 1, paste0(
+                    'The following columns have to many factors: ',
+                    paste(colsWithTooMany, collapse = ', '))))
+    
     
     # check whether NAs exist and if they can be handled by the algorithm
     if (mean(getnumbermissings()) != 0) {
@@ -208,6 +224,10 @@ shinyServer(function(input, output, session) {
       data %<>% select(-one_of(input$whichcolumnsdelete))
     }
     globaldata(data)
+  })
+  
+  observeEvent(input$importexampledata, {
+    getdataOriginal()
   })
   
   observeEvent(input$applyfilter, {
@@ -335,11 +355,36 @@ shinyServer(function(input, output, session) {
     globaldata(globaldata() %>% select(-one_of(featuresToDelete)))
   })
   
+  ######################################################################################  MODEL COMPARE STUFF
+  
+  observeEvent(input$deletemodels, {
+    models(list())
+  })
+  
   ######################################################################################  ~ OUTPUT SECTION ~ 
   ######################################################################################  -------------------
   ######################################################################################
   
   ######################################################################################  SELECT AND FILTER
+  
+  output$datafile <- renderUI({
+    if (input$sourceoffile == 'Upload data from computer') {
+      fileInput('datafile', 
+                'Choose Data',
+                multiple = FALSE,
+                accept = c('text/csv',
+                           'text/comma-separated-values,text/plain',
+                             '.csv'))
+    } else if(input$sourceoffile == 'Choose example data') {
+      selectInput('datafile', 'Choose example data', choices = c('Iris', 'Faithful'))
+    }
+  })
+  
+  output$importexampledata <- renderUI({
+    if (input$sourceoffile == 'Choose example data') {
+      actionButton('importexampledata', 'Import example data')
+    }
+  })
   
   output$charfilters <- renderUI({
     charcols <- get_colsoftype(globaldata(), c('character', 'factor'))
@@ -363,7 +408,9 @@ shinyServer(function(input, output, session) {
   })
   
   output$initGlobaldata <- renderText({
-    getdataOriginal()
+    if(input$sourceoffile == 'Upload data from computer') {
+      getdataOriginal()
+    }
     print('')
   })
   
@@ -461,18 +508,23 @@ shinyServer(function(input, output, session) {
   ######################################################################################  FEATURE SELECTION
   
   output$featureselectthreshold <- renderUI({
-    validate(need(is.null(input$datafile) == F, 'Please select data.'))
+    validate(need(nrow(globaldata()) > 0, 'Please select data.'))
     sliderInput('featureselectthreshold', 'Select number of features to delete', 
                 min = 1, max = dim(globaldata())[2] - 2,
                   value = round(dim(globaldata())[2] / 2))
   })
   
   output$featimpplot <- renderPlotly({
-    validate(need(is.null(input$datafile) == F, 'Please select data.'))
+    validate(need(nrow(globaldata()) > 0, 'Please select data.'))
+    validate(need(is.null(input$learnchoosetarget) == F, 'Choose a target column in Learn model tab first.'))
     validate(need(
       featimp_dict[[input$featureselectmethod]][[regclassif_dict[[input$learnchoosetask]]]] == T,
       paste0('For ', input$learnchoosetask, ' the selected method is not available.')
     ))
+    if (input$learnchoosetask == 'Regression') {
+      validate(need(is.numeric(globaldata() %>% pull(input$learnchoosetarget)), 
+                    'Target column for regression has to be numeric.'))
+    }
     table <- getfeatimptable()
     plot_ly(y = orderXfactors(table[, 1], table[, 3], decr = F), x = table[, 3], type = 'bar', color = 'pink') %>%
       add_plotlayout() %>%
