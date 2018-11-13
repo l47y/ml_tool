@@ -1,5 +1,7 @@
 # ml_tool
 
+Try it here: https://l47y.shinyapps.io/ml_tool/
+
 ## Summary
 This shiny app serves as a little user interface in purpose of demonstrating some standard tasks of machine learning. You upload a csv file of some example data and you play around with it. Originally I just wanted to make it capable of producing some plots of data (and to try shiny) but I decided to extend it a little bit. Mainly the mlr package is used in the background. I tested it with the following well known datasets: 
 * Titanic data from Kaggle (downloadable here: https://www.kaggle.com/c/titanic/data)
