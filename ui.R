@@ -10,12 +10,13 @@ ui <- dashboardPage(
                 menuItem('Select and Filter Data', tabName = 'SelectandFilterData',  icon = icon('database')),
                 menuItem('Show Data', tabName = 'ShowData', icon = icon('align-justify', lib = 'glyphicon')),
                 menuItem('Overview', tabName = 'Overview', icon = icon('eye')),
-                menuItem('Clean data', tabName = 'Cleandata', icon = icon('wrench', lib = 'glyphicon')),
-                menuItem('Text analysis', tabName = 'Textanalysis', icon = icon('font')),
+                menuItem('Clean Data', tabName = 'Cleandata', icon = icon('wrench', lib = 'glyphicon')),
+                menuItem('Graphical Analysis', tabName = 'GraphicalAnalysis', icon = icon('edit')),
+                menuItem('Text Analysis', tabName = 'Textanalysis', icon = icon('font')),
                 menuItem('Correlations and OHE', tabName = 'Correlations', icon = icon('indent-right', lib = 'glyphicon')),
-                menuItem('Feature selection', tabName = 'Featureselection', icon = icon('share', lib = 'glyphicon')),
-                menuItem('Learn model', tabName = 'LearnModel', icon = icon('random', lib = 'glyphicon')),
-                menuItem('Compare models', tabName = 'CompareModels', icon = icon('signal', lib = 'glyphicon')),
+                menuItem('Feature Selection', tabName = 'Featureselection', icon = icon('share', lib = 'glyphicon')),
+                menuItem('Learn Model', tabName = 'LearnModel', icon = icon('random', lib = 'glyphicon')),
+                menuItem('Compare Models', tabName = 'CompareModels', icon = icon('signal', lib = 'glyphicon')),
                 menuItem('Documentation', tabName = 'Documentation', icon = icon('list-alt', lib = 'glyphicon'))
                 
     )
@@ -130,6 +131,24 @@ ui <- dashboardPage(
         )
       ),
 
+      ######################################################################################  
+      
+      tabItem(
+        tabName = 'GraphicalAnalysis', 
+        fluidPage(
+          box(title = 'Type of Graph and Settings', collapsible = T, solidHeader = T, width = 3,
+              selectInput('selectgraphtype', 'Select Type', choices = c('Scatter', 'Network')),
+              uiOutput('plotsettings1'),
+              uiOutput('plotsettings2')
+          ),
+          column(12, 
+            box(title = 'Plot', collapsible = T, solidHeader = T, width = 8,
+                plotlyOutput('graphanaplot', height = 750, width = 750)
+            )
+          )
+        ) 
+      ),
+      
       ######################################################################################  
       
       tabItem(

@@ -58,6 +58,14 @@ shinyServer(function(input, output, session) {
                              method = featimp_dict[[input$featureselectmethod]]$name)$data
   })
   
+  ######################################################################################  GRAPHICAL ANALYSIS STUFF
+  
+  factorColsWithNotTooMany <- reactive({
+    charcols <- get_colsoftype(globaldata(), c('character', 'factor'))
+    colsWithTooMany <- delete_colsWithManyFactors(globaldata(), onlyNames = T)
+    setdiff(charcols, colsWithTooMany)
+  })
+  
   ######################################################################################  MODEL STUFF
   
   gettaskPrefix <- reactive({
@@ -131,6 +139,9 @@ shinyServer(function(input, output, session) {
   })
   
   learnmodel <- eventReactive(input$learnmodel, {
+    
+    # check if more than one column available
+    validate(need(ncol(globaldata()) > 1, 'You need at least two columns in your data to learn a model.'))
     
     # shuffle data before first learning in order to avoid having ordered classes in data
     if (length(models()) < 1) {
@@ -492,14 +503,49 @@ shinyServer(function(input, output, session) {
                 choices = c('ALL COLUMNS', numCols))
   })
   
+  ######################################################################################  GRAPHICAL ANALYSIS
+  
+  output$plotsettings1 <- renderUI({
+    if (input$selectgraphtype == 'Network') {
+      selectInput('selectoriginfornetwork', 'Select Origin for Network', choices = factorColsWithNotTooMany())
+    } else if (input$selectgraphtype == 'Scatter') {
+      selectInput('selectcol1forscatter', 'Select x axis column', 
+                  choices = get_colsoftype(globaldata(), c('numeric', 'integer')))
+    }
+  })
+  
+  output$plotsettings2 <- renderUI({
+    if (input$selectgraphtype == 'Network') {
+      selectInput('selecttargetfornetwork', 'Select Target for Network', choices = 
+                    setdiff(factorColsWithNotTooMany(), input$selectoriginfornetwork))
+    } else if (input$selectgraphtype == 'Scatter') {
+      selectInput('selectcol2forscatter', 'Select y axis column', 
+                  choices = setdiff(get_colsoftype(globaldata(), c('numeric', 'integer')), input$selectcol1forscatter))
+    }
+  })
+  
+  output$graphanaplot <- renderPlotly({
+    if (input$selectgraphtype == 'Network') {
+      validate(need(length(factorColsWithNotTooMany()) > 1, 'You need at least two factor columns to show a network.'))
+      produce_simple_sankey(globaldata(), input$selectoriginfornetwork, input$selecttargetfornetwork) %>%
+        layout(plot_bgcolor = 'black', paper_bgcolor = 'black', 
+               title = paste0(input$selectoriginfornetwork, ' --> ', input$selecttargetfornetwork), 
+               font = list(size = 10), margin = list(t = 50))
+    } else if (input$selectgraphtype == 'Scatter') {
+      validate(need(length(get_colsoftype(globaldata(), c('numeric', 'integer'))) > 1, 
+                    'You need at least two numeric columns.'))
+      plot_ly(x = globaldata() %>% pull(input$selectcol1forscatter), 
+              y = globaldata() %>% pull(input$selectcol2forscatter),
+              color = 'pink') %>% add_plotlayout() %>% 
+        layout(xaxis = list(title = input$selectcol1forscatter), yaxis = list(title = input$selectcol2forscatter))
+    }
+  })
+  
   ######################################################################################  CORRELATIONS AND OHE
  
   output$correlationplot <- renderPlotly({
     validate(need(is.null(input$datafile) == F, 'Please select data.'))
     mat <- get_cormat(globaldata(), maxFactor = maxFactorsForCor, NAtoZero = T)
-    showNotification(paste0('One hot encoding is used for character columns. If more than ', maxFactorsForCor,
-                            ' factors in a column, than this column will not be considered.'),  
-                     type = 'message', duration = 10)
     plot_ly(x = colnames(mat), y = colnames(mat), z = round(mat, digits = 4), 
             type = 'heatmap', colors = 'PiYG') %>% add_plotlayout() %>%
       layout(title = 'Correlations')

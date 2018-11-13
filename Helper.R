@@ -1,4 +1,3 @@
-library(testit)
 
 orderXfactors <- function(toOrder, orderBy, decr = T) {
   return(factor(toOrder, levels = unique(as.character(toOrder[order(orderBy, decreasing = decr)]))))
@@ -71,3 +70,31 @@ get_leastImportanceFeatures <- function(featimptable, number) {
   return (featimptable$name[1:number])
 }
 
+produce_simple_sankey <- function(data, originCol, targetCol) {
+  
+  tmp <- data %>% group_by_(.dots = c(originCol, targetCol)) %>% summarise(count = n()) %>% arrange(desc(count))
+  tmp <- tmp[complete.cases(tmp), ]
+  labels <- c(unique(pull(tmp[, originCol])), unique(pull(tmp[, targetCol])))
+  sources <- rep(0, nrow(tmp))
+  targets <- rep(0, nrow(tmp))
+  values <- rep(0, nrow(tmp))
+  for(i in 1:nrow(tmp)) {
+    sources[i] <- which(labels == pull(tmp[i, originCol]))[1] - 1
+    targets[i] <- which(labels == pull(tmp[i, targetCol]))[1] - 1
+    values[i] <- tmp$count[i]
+  }
+  p <- plot_ly(type = "sankey", orientation = "h",
+               node = list(
+                 label = labels,
+                 pad = 10,
+                 thickness = 20,
+                 line = list(
+                   color = "black",
+                   width = 0.5
+                 )
+               ),
+               link = list(source = sources, target = targets, value =  values),
+               arrangement = "snap"
+  )
+  return(p)
+}
